@@ -279,15 +279,59 @@ function buildExecutedSettlementState({
   };
 }
 
+function buildAdapterMetadata(adapter, input = {}) {
+  const policy = resolveSimulationPolicy(input);
+
+  return {
+    adapter_id: adapter.id ?? 'mock-evm',
+    adapter_mode: adapter.mode ?? 'SIMULATED',
+    chain_family: adapter.chain_family ?? 'EVM',
+    chain_dli: policy.chainDli,
+    settlement_model: 'PROBABILISTIC_TO_THRESHOLD_FINALITY',
+    simulated: (adapter.mode ?? 'SIMULATED') === 'SIMULATED',
+    congestion_level: policy.congestionLevel,
+    network_profile: {
+      native_currency: policy.chainProfile.nativeCurrency,
+      native_usd_price: policy.chainProfile.nativeUsdPrice,
+      reference_block_base_number: policy.chainProfile.blockBaseNumber,
+    },
+    lifecycle_policy: {
+      ramp_type: policy.rampType,
+      maximum_slippage_rate: policy.maximumSlippageRate.toFixed(4),
+      required_confirmation_depth: policy.requiredConfirmationDepth,
+      estimated_confirmation_seconds: policy.estimatedConfirmationSeconds,
+      block_time_seconds: policy.blockTimeSeconds,
+      confirmation_interval_ms: policy.confirmationIntervalMs,
+      broadcast_delay_ms: policy.broadcastDelayMs,
+      inclusion_delay_ms: policy.inclusionDelayMs,
+      finality_delay_ms: policy.finalityDelayMs,
+    },
+    fee_model: {
+      gas_limit: policy.gasLimit,
+      base_fee_gwei: policy.baseFeeGwei.toFixed(1),
+      priority_fee_gwei: policy.priorityFeeGwei.toFixed(1),
+      service_fee_usd: policy.serviceFee.toFixed(2),
+      ramp_spread_bps: policy.rampSpreadBps,
+      slippage_estimate_bps: policy.slippageEstimateBps,
+    },
+  };
+}
+
 export function createMockEvmChainAdapter() {
   return {
     id: 'mock-evm',
+    mode: 'SIMULATED',
+    chain_family: 'EVM',
 
     hasExpired(expiryDateTime) {
       return Boolean(expiryDateTime) && Date.parse(expiryDateTime) <= Date.now();
     },
 
     buildFeeEstimate,
+
+    describeLifecycle(input = {}) {
+      return buildAdapterMetadata(this, input);
+    },
 
     buildQuoteResponse(request = {}) {
       const createdAt = nowIso();
@@ -305,6 +349,7 @@ export function createMockEvmChainAdapter() {
           current_base_fee_gwei: policy.baseFeeGwei.toFixed(1),
           average_block_time_seconds: policy.blockTimeSeconds,
         },
+        adapter_metadata: this.describeLifecycle(request),
         created_at: createdAt,
       };
     },

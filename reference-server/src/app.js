@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 
-import { createMockEvmChainAdapter } from './chain/mock-evm-adapter.js';
+import { normalizeChainAdapter } from './chain/adapter-contract.js';
 import { ReferenceStore } from './db.js';
 import { registerEventRoutes } from './routes/event-routes.js';
 import { registerHealthRoutes } from './routes/health-routes.js';
@@ -36,23 +36,24 @@ function normalizeWebhookDispatchConfig(config = {}) {
 
 export async function buildApp({
   dbPath = ':memory:',
-  chainAdapter = createMockEvmChainAdapter(),
+  chainAdapter = null,
   webhookSender = defaultWebhookSender,
   webhookDispatch = {},
   webhookRetryScheduleMs,
 } = {}) {
   const app = Fastify({ logger: false });
   const dispatchConfig = normalizeWebhookDispatchConfig(webhookDispatch);
+  const normalizedChainAdapter = normalizeChainAdapter(chainAdapter);
   const store = new ReferenceStore({
     dbPath,
-    chainAdapter,
+    chainAdapter: normalizedChainAdapter,
     webhookRetryScheduleMs,
   });
   let dispatchTimer = null;
   let dispatchInFlight = false;
 
   app.decorate('store', store);
-  app.decorate('chainAdapter', chainAdapter);
+  app.decorate('chainAdapter', normalizedChainAdapter);
   app.decorate('webhookSender', webhookSender);
   app.decorate('dispatchDueWebhookDeliveries', async ({ limit, subscriptionId } = {}) =>
     store.dispatchPendingWebhookDeliveries({

@@ -148,6 +148,32 @@ The server now supports both:
 
 Manual dispatch remains useful for demos and deterministic testing.
 
+### Delivery guarantee rule
+
+The current guarantee is `AT_LEAST_ONCE_BEST_EFFORT`.
+
+That means the stack intentionally prefers canonical event persistence plus
+retry over any claim of exactly-once delivery. Polling remains the recovery
+surface when a receiver needs to reconcile after missed or duplicate push events.
+
+### Exhaustion rule
+
+When delivery can no longer make progress, the record moves to terminal
+`FAILED` with explicit operator fields:
+
+- `failure_category`
+- `terminal_reason`
+- `dead_lettered_at`
+
+Current terminal reasons are:
+
+- `MAX_ATTEMPTS_EXHAUSTED`
+- `SUBSCRIPTION_INACTIVE`
+- `EVENT_MISSING`
+
+This keeps exhausted delivery behavior visible and auditable instead of leaving
+it implicit inside retry counters.
+
 ### Signature rule
 
 Webhook deliveries are signed with `x-pacscrypto-signature` over:

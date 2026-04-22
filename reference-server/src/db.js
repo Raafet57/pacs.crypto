@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { createHmac, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import { createMockEvmChainAdapter } from './chain/mock-evm-adapter.js';
+import { normalizeChainAdapter } from './chain/adapter-contract.js';
 
 const TRAVEL_RULE_CALLBACK_STATUSES = new Set([
   'ACCEPTED',
@@ -20,6 +20,7 @@ const WEBHOOK_EVENT_TYPES = [
   'finality_receipt.updated',
   'reporting_notification.created',
 ];
+const WEBHOOK_DELIVERY_GUARANTEE = 'AT_LEAST_ONCE_BEST_EFFORT';
 const WEBHOOK_DELIVERY_TERMINAL_STATES = new Set(['DELIVERED', 'FAILED']);
 
 function nowIso() {
@@ -91,6 +92,22 @@ function parseListFilter(value) {
   }
 
   return [];
+}
+
+function parseOptionalBoolean(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return null;
 }
 
 function encodeCursor(index) {
@@ -272,7 +289,15 @@ function getTravelRuleBreakdownKey(record, groupBy) {
   return null;
 }
 
-function buildInstructionResponse(record) {
+function buildAdapterMetadata(chainAdapter, input) {
+  if (typeof chainAdapter?.describeLifecycle !== 'function') {
+    return null;
+  }
+
+  return chainAdapter.describeLifecycle(input);
+}
+
+function buildInstructionResponse(record, chainAdapter = null) {
   return {
     instruction_id: record.instruction_id,
     uetr: record.uetr,
@@ -281,7 +306,15 @@ function buildInstructionResponse(record) {
     fee_estimate: record.fee_estimate,
     expiry_date_time: record.expiry_date_time,
     debit_timing: record.debit_timing,
+    adapter_metadata: buildAdapterMetadata(chainAdapter, record),
     created_at: record.created_at,
+  };
+}
+
+function buildInstructionDetailResponse(record, chainAdapter = null) {
+  return {
+    ...record,
+    adapter_metadata: buildAdapterMetadata(chainAdapter, record),
   };
 }
 
@@ -407,7 +440,7 @@ function findInstructionStatusEvent(record, status) {
   return null;
 }
 
-function buildExecutionStatusResponse(record) {
+function buildExecutionStatusResponse(record, chainAdapter = null) {
   const history = buildInstructionStatusHistory(record);
   const latestStatusEvent = history.at(-1) ?? null;
 
@@ -432,11 +465,12 @@ function buildExecutionStatusResponse(record) {
     expiry_date_time: record.expiry_date_time,
     created_at: record.created_at,
     updated_at: record.updated_at,
+    adapter_metadata: buildAdapterMetadata(chainAdapter, record),
     status_history: history,
   };
 }
 
-function buildFinalityReceipt(record) {
+function buildFinalityReceipt(record, chainAdapter = null) {
   const broadcastEvent = findInstructionStatusEvent(record, 'BROADCAST');
   const confirmingEvent = findInstructionStatusEvent(record, 'CONFIRMING');
   const finalEvent = findInstructionStatusEvent(record, 'FINAL');
@@ -475,6 +509,7 @@ function buildFinalityReceipt(record) {
     observed_at: record.updated_at,
     final_at: finalEvent?.status_at ?? null,
     not_applicable_reason: notApplicableReason,
+    adapter_metadata: buildAdapterMetadata(chainAdapter, record),
   };
 }
 
@@ -1146,6 +1181,10 @@ function buildWebhookDeliveryRecord(event, subscription) {
     response_body_excerpt: null,
     last_error: null,
     last_signature: null,
+    failure_category: null,
+    terminal_reason: null,
+    dead_lettered_at: null,
+    delivery_guarantee: WEBHOOK_DELIVERY_GUARANTEE,
     created_at: event.created_at,
     updated_at: event.created_at,
   };
@@ -1205,14 +1244,14 @@ function shouldEmitFinalityReceiptEvent(record, previousRecord) {
 export class ReferenceStore {
   constructor({
     dbPath = ':memory:',
-    chainAdapter = createMockEvmChainAdapter(),
+    chainAdapter = null,
     webhookRetryScheduleMs = DEFAULT_WEBHOOK_RETRY_SCHEDULE_MS,
   } = {}) {
     if (dbPath !== ':memory:') {
       mkdirSync(dirname(dbPath), { recursive: true });
     }
 
-    this.chainAdapter = chainAdapter;
+    this.chainAdapter = normalizeChainAdapter(chainAdapter);
     this.webhookRetryScheduleMs = normalizeRetryScheduleMs(webhookRetryScheduleMs);
     this.db = new DatabaseSync(dbPath);
     this.db.exec(`
@@ -1872,15 +1911,19 @@ export class ReferenceStore {
   }
 
   toInstructionResponse(record) {
-    return buildInstructionResponse(record);
+    return buildInstructionResponse(record, this.chainAdapter);
+  }
+
+  toInstructionDetailResponse(record) {
+    return buildInstructionDetailResponse(record, this.chainAdapter);
   }
 
   toExecutionStatusResponse(record) {
-    return buildExecutionStatusResponse(record);
+    return buildExecutionStatusResponse(record, this.chainAdapter);
   }
 
   toFinalityReceipt(record) {
-    return buildFinalityReceipt(record);
+    return buildFinalityReceipt(record, this.chainAdapter);
   }
 
   appendInstructionOutboxEvents(record, previousRecord = null) {
@@ -2043,12 +2086,12 @@ export class ReferenceStore {
     return row ? parseJson(row.delivery_json, null) : null;
   }
 
-  listWebhookDeliveries(filters = {}) {
-    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
-    const offset = decodeCursor(filters.cursor);
+  listWebhookDeliveryRecords(filters = {}) {
     const eventTypes = parseListFilter(filters.event_type);
     const deliveryStates = parseListFilter(filters.delivery_state);
-    const deliveries = this.listWebhookDeliveriesStmt
+    const deadLettered = parseOptionalBoolean(filters.dead_lettered);
+
+    return this.listWebhookDeliveriesStmt
       .all()
       .map((row) => parseJson(row.delivery_json, null))
       .filter(Boolean)
@@ -2071,8 +2114,19 @@ export class ReferenceStore {
         if (deliveryStates.length && !deliveryStates.includes(delivery.delivery_state)) {
           return false;
         }
+        if (deadLettered === true && !delivery.dead_lettered_at) {
+          return false;
+        }
+        if (deadLettered === false && delivery.dead_lettered_at) {
+          return false;
+        }
         return true;
       });
+  }
+
+  paginateWebhookDeliveries(deliveries, filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const offset = decodeCursor(filters.cursor);
     const page = deliveries.slice(offset, offset + pageSize);
     const nextOffset = offset + page.length;
 
@@ -2082,6 +2136,85 @@ export class ReferenceStore {
       ...(nextOffset < deliveries.length ? { next_cursor: encodeCursor(nextOffset) } : { next_cursor: null }),
       generated_at: nowIso(),
       deliveries: page,
+    };
+  }
+
+  listWebhookDeliveries(filters = {}) {
+    return this.paginateWebhookDeliveries(
+      this.listWebhookDeliveryRecords(filters),
+      filters,
+    );
+  }
+
+  listDeadLetterWebhookDeliveries(filters = {}) {
+    return this.paginateWebhookDeliveries(
+      this.listWebhookDeliveryRecords({
+        ...filters,
+        dead_lettered: true,
+      }),
+      filters,
+    );
+  }
+
+  getWebhookDeliveryStats(filters = {}) {
+    const deliveries = this.listWebhookDeliveryRecords(filters);
+    const dueNow = Date.now();
+    const stateCounts = {
+      PENDING: 0,
+      RETRYING: 0,
+      DELIVERED: 0,
+      FAILED: 0,
+    };
+
+    let dueNowCount = 0;
+    let oldestNextAttemptAt = null;
+    let latestDeadLetterAt = null;
+
+    for (const delivery of deliveries) {
+      if (stateCounts[delivery.delivery_state] !== undefined) {
+        stateCounts[delivery.delivery_state] += 1;
+      }
+
+      if (
+        !WEBHOOK_DELIVERY_TERMINAL_STATES.has(delivery.delivery_state) &&
+        Date.parse(delivery.next_attempt_at) <= dueNow
+      ) {
+        dueNowCount += 1;
+      }
+
+      if (
+        !WEBHOOK_DELIVERY_TERMINAL_STATES.has(delivery.delivery_state) &&
+        (!oldestNextAttemptAt ||
+          Date.parse(delivery.next_attempt_at) < Date.parse(oldestNextAttemptAt))
+      ) {
+        oldestNextAttemptAt = delivery.next_attempt_at;
+      }
+
+      if (
+        delivery.dead_lettered_at &&
+        (!latestDeadLetterAt ||
+          Date.parse(delivery.dead_lettered_at) > Date.parse(latestDeadLetterAt))
+      ) {
+        latestDeadLetterAt = delivery.dead_lettered_at;
+      }
+    }
+
+    return {
+      generated_at: nowIso(),
+      delivery_guarantee: WEBHOOK_DELIVERY_GUARANTEE,
+      retry_schedule_ms: [...this.webhookRetryScheduleMs],
+      filters_applied: {
+        subscription_id: filters.subscription_id ?? null,
+        instruction_id: filters.instruction_id ?? null,
+        uetr: filters.uetr ?? null,
+        event_type: parseListFilter(filters.event_type),
+      },
+      total_deliveries: deliveries.length,
+      state_counts: stateCounts,
+      dead_letter_count: deliveries.filter((delivery) => delivery.dead_lettered_at).length,
+      due_now_count: dueNowCount,
+      oldest_next_attempt_at: oldestNextAttemptAt,
+      latest_dead_letter_at: latestDeadLetterAt,
     };
   }
 
@@ -2112,12 +2245,23 @@ export class ReferenceStore {
       const event = this.getOutboxEvent(delivery.event_id);
 
       if (!subscription || !subscription.active || !event) {
+        const failedAt = nowIso();
+        const terminalReason =
+          !subscription || !subscription.active
+            ? 'SUBSCRIPTION_INACTIVE'
+            : 'EVENT_MISSING';
         const skipped = {
           ...delivery,
           delivery_state: 'FAILED',
-          last_error: 'Subscription inactive or event missing.',
-          updated_at: nowIso(),
-          next_attempt_at: delivery.next_attempt_at,
+          last_error:
+            terminalReason === 'EVENT_MISSING'
+              ? 'Referenced outbox event is missing.'
+              : 'Subscription is inactive or missing.',
+          failure_category: 'CONFIGURATION',
+          terminal_reason: terminalReason,
+          dead_lettered_at: failedAt,
+          updated_at: failedAt,
+          next_attempt_at: failedAt,
         };
         this.updateWebhookDeliveryStmt.run(
           skipped.delivery_state,
@@ -2173,6 +2317,13 @@ export class ReferenceStore {
           response_body_excerpt: response.bodyText?.slice(0, 500) ?? null,
           last_error: delivered ? null : `Endpoint returned HTTP ${response.status}.`,
           last_signature: signature,
+          failure_category: delivered ? null : 'HTTP_RESPONSE',
+          terminal_reason:
+            delivered || attemptCount < subscription.max_attempts
+              ? null
+              : 'MAX_ATTEMPTS_EXHAUSTED',
+          dead_lettered_at:
+            delivered || attemptCount < subscription.max_attempts ? null : attemptAt,
           updated_at: attemptAt,
         };
 
@@ -2220,6 +2371,13 @@ export class ReferenceStore {
           response_body_excerpt: null,
           last_error: error.message,
           last_signature: signature,
+          failure_category: 'TRANSPORT',
+          terminal_reason:
+            attemptCount >= subscription.max_attempts
+              ? 'MAX_ATTEMPTS_EXHAUSTED'
+              : null,
+          dead_lettered_at:
+            attemptCount >= subscription.max_attempts ? attemptAt : null,
           updated_at: attemptAt,
         };
         this.updateWebhookDeliveryStmt.run(
@@ -2728,11 +2886,13 @@ export class ReferenceStore {
   advanceInstructionLifecycle(record, { persist = false } = {}) {
     const normalized = {
       ...record,
-      on_chain_settlement: this.chainAdapter.normalizeOnChainSettlement(
-        record.on_chain_settlement,
-        record.interbank_settlement_amount?.amount,
-        record,
-      ),
+      on_chain_settlement:
+        record.on_chain_settlement ??
+        this.chainAdapter.normalizeOnChainSettlement(
+          record.on_chain_settlement,
+          record.interbank_settlement_amount?.amount,
+          record,
+        ),
       status_history: normalizeInstructionStatusHistory(record.status_history, record),
     };
 

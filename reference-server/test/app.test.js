@@ -228,6 +228,19 @@ function assertCancellationResponseShape(response) {
   assertIsoDateTime(response.cancelled_at);
 }
 
+function assertAdapterMetadataShape(metadata, expectedAdapterId = null) {
+  assert.ok(metadata);
+  assert.equal(typeof metadata.adapter_id, 'string');
+  assert.equal(typeof metadata.adapter_mode, 'string');
+  assert.equal(typeof metadata.chain_family, 'string');
+  assert.equal(typeof metadata.chain_dli, 'string');
+  assert.ok(metadata.lifecycle_policy);
+  assert.ok(metadata.fee_model);
+  if (expectedAdapterId) {
+    assert.equal(metadata.adapter_id, expectedAdapterId);
+  }
+}
+
 async function waitFor(assertion, { timeoutMs = 1500, intervalMs = 20 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
@@ -305,6 +318,7 @@ test('quote -> instruction -> get status', async () => {
   const quote = quoteResponse.json();
   assertQuoteResponseShape(quote);
   assert.ok(quote.quote_id);
+  assertAdapterMetadataShape(quote.adapter_metadata, 'mock-evm');
 
   const instructionResponse = await app.inject({
     method: 'POST',
@@ -327,6 +341,7 @@ test('quote -> instruction -> get status', async () => {
   assert.equal(instruction.status, 'PENDING');
   assert.equal(instruction.debit_timing, 'ON_BROADCAST');
   assert.ok(instruction.fee_estimate);
+  assertAdapterMetadataShape(instruction.adapter_metadata, 'mock-evm');
 
   const getResponse = await app.inject({
     method: 'GET',
@@ -337,6 +352,7 @@ test('quote -> instruction -> get status', async () => {
   assertInstructionStatusResponseShape(getResponse.json());
   assert.ok(getResponse.json().instruction_id);
   assert.ok(['PENDING', 'BROADCAST', 'CONFIRMING', 'FINAL'].includes(getResponse.json().status));
+  assertAdapterMetadataShape(getResponse.json().adapter_metadata, 'mock-evm');
 
   const searchResponse = await app.inject({
     method: 'GET',
@@ -893,6 +909,7 @@ test('execution status can be retrieved by instruction id and uetr', async () =>
   assert.equal(byInstructionIdResponse.json().transaction_hash, null);
   assert.equal(byInstructionIdResponse.json().status_history.length, 1);
   assert.equal(byInstructionIdResponse.json().status_history[0].status, 'PENDING');
+  assertAdapterMetadataShape(byInstructionIdResponse.json().adapter_metadata, 'mock-evm');
 
   const byUetrResponse = await app.inject({
     method: 'GET',
@@ -946,6 +963,7 @@ test('finality receipt reflects settled on-chain state and supports uetr lookup'
   assert.equal(byInstructionIdResponse.json().confirmation_depth, 12);
   assert.ok(byInstructionIdResponse.json().transaction_hash);
   assert.ok(byInstructionIdResponse.json().final_at);
+  assertAdapterMetadataShape(byInstructionIdResponse.json().adapter_metadata, 'mock-evm');
 
   const byUetrResponse = await app.inject({
     method: 'GET',
@@ -954,6 +972,60 @@ test('finality receipt reflects settled on-chain state and supports uetr lookup'
 
   assert.equal(byUetrResponse.statusCode, 200);
   assert.equal(byUetrResponse.json().instruction_id, instruction.instruction_id);
+
+  await app.close();
+});
+
+test('finality receipt remains stable after execution status has already advanced the instruction', async () => {
+  const app = await buildApp();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-FINALITY-STABLE-001',
+      },
+      interbank_settlement_amount: {
+        amount: '125000.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FINAL');
+  assert.ok(statusResponse.json().transaction_hash);
+
+  const finalityResponse = await app.inject({
+    method: 'GET',
+    url: `/finality-receipt/${instruction.instruction_id}`,
+  });
+
+  assert.equal(finalityResponse.statusCode, 200);
+  assert.equal(finalityResponse.json().instruction_status, 'FINAL');
+  assert.equal(finalityResponse.json().finality_status, 'FINAL');
+  assert.equal(
+    finalityResponse.json().transaction_hash,
+    statusResponse.json().transaction_hash,
+  );
+  assert.ok(finalityResponse.json().block_number);
+  assert.ok(finalityResponse.json().block_timestamp);
 
   await app.close();
 });
@@ -1372,6 +1444,86 @@ test('background webhook dispatch retries and eventually delivers due events', a
   assert.ok(delivered.attempt_count >= 2);
   assert.equal(delivered.response_status, 202);
   assert.equal(attempts >= 2, true);
+
+  await app.close();
+});
+
+test('webhook deliveries move to dead-letter after max attempts and expose operator stats', async () => {
+  let attempts = 0;
+  const app = await buildApp({
+    webhookDispatch: {
+      enabled: true,
+      intervalMs: 10,
+      batchSize: 10,
+    },
+    webhookRetryScheduleMs: [10],
+    webhookSender: async () => {
+      attempts += 1;
+      return {
+        status: 502,
+        bodyText: 'upstream failed',
+      };
+    },
+  });
+
+  const subscriptionResponse = await app.inject({
+    method: 'POST',
+    url: '/webhook-endpoints',
+    payload: {
+      url: 'https://receiver.example/dead-letter',
+      signing_secret: 'whsec_deadletter_123456',
+      subscribed_event_types: ['execution_status.updated'],
+      max_attempts: 2,
+    },
+  });
+
+  assert.equal(subscriptionResponse.statusCode, 201);
+  const subscription = subscriptionResponse.json();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-WEBHOOK-DEADLETTER-001',
+      },
+      interbank_settlement_amount: {
+        amount: '950.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+
+  const deadLetterDelivery = await waitFor(async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/webhook-deliveries/dead-letter?subscription_id=${subscription.subscription_id}`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().total_matched, 1);
+    const delivery = response.json().deliveries[0];
+    assert.equal(delivery.delivery_state, 'FAILED');
+    assert.equal(delivery.terminal_reason, 'MAX_ATTEMPTS_EXHAUSTED');
+    assert.equal(delivery.failure_category, 'HTTP_RESPONSE');
+    assert.ok(delivery.dead_lettered_at);
+    return delivery;
+  }, { timeoutMs: 2500, intervalMs: 25 });
+
+  const statsResponse = await app.inject({
+    method: 'GET',
+    url: `/webhook-deliveries/stats?subscription_id=${subscription.subscription_id}`,
+  });
+
+  assert.equal(statsResponse.statusCode, 200);
+  assert.equal(statsResponse.json().delivery_guarantee, 'AT_LEAST_ONCE_BEST_EFFORT');
+  assert.deepEqual(statsResponse.json().retry_schedule_ms, [10]);
+  assert.equal(statsResponse.json().state_counts.FAILED, 1);
+  assert.equal(statsResponse.json().dead_letter_count, 1);
+  assert.equal(attempts >= 2, true);
+  assert.equal(deadLetterDelivery.delivery_guarantee, 'AT_LEAST_ONCE_BEST_EFFORT');
 
   await app.close();
 });
@@ -1947,17 +2099,21 @@ test('reporting records expose traceability links back to instruction and travel
   await app.close();
 });
 
-test('chain adapter can be injected without changing route contracts', async () => {
+test('chain adapter can be partially injected without changing route contracts', async () => {
   const baseAdapter = createMockEvmChainAdapter();
   const customAdapter = {
-    ...baseAdapter,
-    buildQuoteResponse(request) {
-      const quote = baseAdapter.buildQuoteResponse(request);
+    id: 'testnet-ready-mock',
+    mode: 'TESTNET_READY',
+    buildQuoteResponse: baseAdapter.buildQuoteResponse,
+    describeLifecycle(input) {
+      const metadata = baseAdapter.describeLifecycle(input);
       return {
-        ...quote,
-        chain_conditions: {
-          ...quote.chain_conditions,
-          congestion_level: 'HIGH',
+        ...metadata,
+        adapter_id: 'testnet-ready-mock',
+        adapter_mode: 'TESTNET_READY',
+        lifecycle_policy: {
+          ...metadata.lifecycle_policy,
+          required_confirmation_depth: 9,
         },
       };
     },
@@ -1987,7 +2143,14 @@ test('chain adapter can be injected without changing route contracts', async () 
   });
 
   assert.equal(quoteResponse.statusCode, 200);
-  assert.equal(quoteResponse.json().chain_conditions.congestion_level, 'HIGH');
+  assertAdapterMetadataShape(
+    quoteResponse.json().adapter_metadata,
+    'testnet-ready-mock',
+  );
+  assert.equal(
+    quoteResponse.json().adapter_metadata.adapter_mode,
+    'TESTNET_READY',
+  );
 
   const createResponse = await app.inject({
     method: 'POST',
@@ -2024,6 +2187,14 @@ test('chain adapter can be injected without changing route contracts', async () 
   assert.equal(
     statusResponse.json().transaction_hash,
     '0xadapter00000000000000000000000000000000000000000000000000000000',
+  );
+  assertAdapterMetadataShape(
+    statusResponse.json().adapter_metadata,
+    'testnet-ready-mock',
+  );
+  assert.equal(
+    statusResponse.json().adapter_metadata.lifecycle_policy.required_confirmation_depth,
+    9,
   );
 
   await app.close();

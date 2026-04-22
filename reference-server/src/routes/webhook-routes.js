@@ -60,6 +60,14 @@ export function registerWebhookRoutes(app) {
     return app.store.listWebhookDeliveries(request.query);
   });
 
+  app.get('/webhook-deliveries/stats', async (request) => {
+    return app.store.getWebhookDeliveryStats(request.query);
+  });
+
+  app.get('/webhook-deliveries/dead-letter', async (request) => {
+    return app.store.listDeadLetterWebhookDeliveries(request.query);
+  });
+
   app.get('/webhook-deliveries/:deliveryId', async (request, reply) => {
     const delivery = app.store.getWebhookDelivery(request.params.deliveryId);
     if (!delivery) {

@@ -116,7 +116,7 @@ export function registerInstructionRoutes(app) {
       });
     }
 
-    return instruction;
+    return app.store.toInstructionDetailResponse(instruction);
   });
 
   app.post('/instruction/:instructionId/signed-transaction', async (_request, reply) => {

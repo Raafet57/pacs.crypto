@@ -4,6 +4,8 @@ First executable slice of the `pacs.crypto` reference stack.
 
 Conformance status for the spec-covered routes is tracked in [`../docs/conformance.md`](../docs/conformance.md).
 Current lifecycle and webhook/reporting decision rules are captured in [`../docs/spec-hardening.md`](../docs/spec-hardening.md).
+The current chain-adapter boundary is documented in [`../docs/chain-adapter.md`](../docs/chain-adapter.md).
+The delivery model is documented in [`../docs/webhook-delivery.md`](../docs/webhook-delivery.md).
 
 Current scope:
 
@@ -30,6 +32,8 @@ Current scope:
 - `GET /webhook-endpoints/:subscriptionId`
 - `GET /webhook-endpoints/:subscriptionId/deliveries`
 - `GET /webhook-deliveries`
+- `GET /webhook-deliveries/stats`
+- `GET /webhook-deliveries/dead-letter`
 - `GET /webhook-deliveries/:deliveryId`
 - `POST /webhook-deliveries/dispatch`
 - `GET /reporting/notifications`
@@ -67,11 +71,13 @@ Environment overrides:
 - Instruction status progression now runs through an injected chain-adapter boundary.
 - The default adapter is a mocked EVM adapter with amount-aware fee, slippage, and finality modeling over the lifecycle:
   `PENDING -> BROADCAST -> CONFIRMING -> FINAL`
+- Adapter metadata is surfaced on quote, instruction, execution-status, and finality reads without adding new execution families.
 - `execution-status` is the pacs.002-like read surface for lifecycle state and history.
 - `finality-receipt` is the camt.025-like read surface for transaction hash, confirmations, and finality proof.
 - `event-outbox` is the webhook-style delivery mirror. Event payloads are the same objects returned by `execution-status` and `finality-receipt`, so push and poll stay aligned.
 - Webhook deliveries are HMAC-signed with `x-pacscrypto-signature` over `<timestamp>.<raw-body>`, plus delivery and event ids in headers.
 - Delivery retries are persisted with `PENDING`, `RETRYING`, `DELIVERED`, and `FAILED` states. Background dispatch is enabled by default in the server process, and dispatch can still be forced manually via `POST /webhook-deliveries/dispatch`.
+- Exhausted deliveries now carry explicit dead-letter fields and can be inspected through `GET /webhook-deliveries/stats` and `GET /webhook-deliveries/dead-letter`.
 - `reporting/notifications` is the first reporting-family surface: a `camt.054` analogue for booked debtor debit and creditor credit notifications keyed to the instruction lifecycle.
 - `reporting/intraday` is the next reporting-family surface: a narrow `camt.052` analogue summarizing booked intraday movements and account views from those notifications.
 - `reporting/statements` starts the statement layer: a `camt.053` analogue that persists per-instruction account statements derived from the existing reporting notifications and instruction context.
@@ -79,4 +85,4 @@ Environment overrides:
 - Reporting notifications are also emitted as `reporting_notification.created` events through the same outbox and webhook delivery pipeline.
 - Delegated signing is intentionally not implemented in this first slice.
 - The root HTML simulators support both `Demo` mode and `Live API` mode against this server.
-- The adapter boundary is intentionally narrow: quote generation, fee estimates, settlement defaults, lifecycle advancement, and lifecycle timestamps now come from the chain adapter rather than being hard-coded in route or storage logic.
+- The adapter boundary is intentionally narrow: quote generation, fee estimates, settlement defaults, lifecycle advancement, lifecycle timestamps, and lifecycle metadata now come from the chain adapter rather than being hard-coded in route or storage logic.
