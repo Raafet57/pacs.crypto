@@ -528,6 +528,134 @@ test('pending instruction can be cancelled before broadcast', async () => {
   await app.close();
 });
 
+test('travel rule search validates spec query parameters', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/travel-rule/search?direction=SIDEWAYS&submitted_from=bad-date&status=UNKNOWN&page_size=999&sort=latest',
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'INVALID_REQUEST');
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'direction'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'submitted_from'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'status'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'page_size'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'sort'),
+    true,
+  );
+
+  await app.close();
+});
+
+test('travel rule search applies currency wallet and sort filters from the spec', async () => {
+  const app = await buildApp();
+
+  const firstResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: buildTravelRuleSubmission({
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-SEARCH-001',
+        },
+        interbank_settlement_amount: {
+          amount: '100.00',
+          currency: 'USD',
+        },
+        debtor_account: {
+          proxy: {
+            identification: '0xdebtorsearch',
+          },
+        },
+        creditor_account: {
+          proxy: {
+            identification: '0xcreditorone',
+          },
+        },
+      },
+    }),
+  });
+
+  const secondResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: buildTravelRuleSubmission({
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-SEARCH-002',
+        },
+        interbank_settlement_amount: {
+          amount: '250.00',
+          currency: 'USD',
+        },
+        debtor_account: {
+          proxy: {
+            identification: '0xdebtorsearch',
+          },
+        },
+        creditor_account: {
+          proxy: {
+            identification: '0xcreditortwo',
+          },
+        },
+      },
+    }),
+  });
+
+  const thirdResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: buildTravelRuleSubmission({
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-SEARCH-003',
+        },
+        interbank_settlement_amount: {
+          amount: '999.00',
+          currency: 'EUR',
+        },
+        debtor_account: {
+          proxy: {
+            identification: '0xotherdebtor',
+          },
+        },
+      },
+    }),
+  });
+
+  assert.equal(firstResponse.statusCode, 201);
+  assert.equal(secondResponse.statusCode, 201);
+  assert.equal(thirdResponse.statusCode, 201);
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/travel-rule/search?currency=USD&debtor_wallet=0xdebtorsearch&sort=amount_desc',
+  });
+
+  assert.equal(response.statusCode, 200);
+  assertTravelRuleSearchResponseShape(response.json());
+  assert.equal(response.json().total_matched, 2);
+  assert.equal(response.json().records[0].settlement_amount, '250.00');
+  assert.equal(response.json().records[1].settlement_amount, '100.00');
+
+  await app.close();
+});
+
 test('ramp instructions fail early when estimated slippage exceeds the configured limit', async () => {
   const app = await buildApp();
 
@@ -569,6 +697,74 @@ test('ramp instructions fail early when estimated slippage exceeds the configure
   assert.match(statusResponse.json().failure_reason, /Estimated slippage/);
   assert.equal(statusResponse.json().transaction_hash, null);
   assert.equal(statusResponse.json().confirmation_depth, 0);
+
+  await app.close();
+});
+
+test('instruction search validates spec query parameters', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/instruction/search?from=bad-date&status=UNKNOWN&chain_dli=bad&page_size=9999',
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'INVALID_REQUEST');
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'from'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'status'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'chain_dli'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'page_size'),
+    true,
+  );
+
+  await app.close();
+});
+
+test('delegated signing remains explicitly out of scope', async () => {
+  const app = await buildApp();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-DELEGATED-001',
+      },
+      blockchain_instruction: {
+        token: {
+          token_symbol: 'USDC',
+          token_dti: '4H95J0R2X',
+        },
+        chain_dli: 'X9J9XDMTD',
+        custody_model: 'DELEGATED_SIGNING',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 501);
+  assert.equal(createResponse.json().error, 'not_implemented');
+
+  const signedTransactionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction/550e8400-e29b-41d4-a716-446655440000/signed-transaction',
+    payload: {
+      signed_transaction: '0xdeadbeef',
+    },
+  });
+
+  assert.equal(signedTransactionResponse.statusCode, 501);
+  assert.equal(signedTransactionResponse.json().error, 'not_implemented');
 
   await app.close();
 });
@@ -1502,6 +1698,10 @@ test('intraday reporting view summarizes booked movements and supports account f
   assert.equal(intradayResponse.json().movement_summary.credit_count, 1);
   assert.equal(intradayResponse.json().account_views.length, 2);
   assert.equal(intradayResponse.json().movement_summary.totals[0].currency, 'USD');
+  assert.equal(
+    intradayResponse.json().traceability.instruction_id,
+    instruction.instruction_id,
+  );
 
   const debtorOnlyResponse = await app.inject({
     method: 'GET',
@@ -1514,6 +1714,10 @@ test('intraday reporting view summarizes booked movements and supports account f
   assert.equal(
     debtorOnlyResponse.json().account_views[0].wallet_address,
     '0xintradaydebit',
+  );
+  assert.equal(
+    debtorOnlyResponse.json().account_views[0].instruction_ids[0],
+    instruction.instruction_id,
   );
   assert.equal(
     debtorOnlyResponse.json().movement_summary.totals[0].net_total,
@@ -1597,6 +1801,7 @@ test('statement reporting derives persisted account statements from reporting no
   assert.equal(debtorStatement.balance_summary.closing_balance.amount, '-5100');
   assert.equal(debtorStatement.movement_summary.entry_count, 1);
   assert.equal(debtorStatement.instruction_context.finality_status, 'FINAL');
+  assert.equal(debtorStatement.statement_scope.source_notification_count, 1);
 
   const debtorStatementDetailResponse = await app.inject({
     method: 'GET',
@@ -1606,6 +1811,10 @@ test('statement reporting derives persisted account statements from reporting no
   assert.equal(debtorStatementDetailResponse.statusCode, 200);
   assert.equal(debtorStatementDetailResponse.json().entries.length, 1);
   assert.equal(debtorStatementDetailResponse.json().entries[0].entry_type, 'DEBIT');
+  assert.equal(
+    debtorStatementDetailResponse.json().statement_scope.derivation_basis,
+    'BOOKED_NOTIFICATIONS',
+  );
 
   const filteredStatementsResponse = await app.inject({
     method: 'GET',
@@ -1615,6 +1824,125 @@ test('statement reporting derives persisted account statements from reporting no
   assert.equal(filteredStatementsResponse.statusCode, 200);
   assert.equal(filteredStatementsResponse.json().total_matched, 1);
   assert.equal(filteredStatementsResponse.json().statements[0].statement_id, debtorStatement.statement_id);
+
+  await app.close();
+});
+
+test('reporting records expose traceability links back to instruction and travel rule records', async () => {
+  const app = await buildApp();
+
+  const travelRuleResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: buildTravelRuleSubmission({
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-REPORT-TRACE-001',
+        },
+      },
+    }),
+  });
+
+  assert.equal(travelRuleResponse.statusCode, 201);
+  const travelRuleRecord = travelRuleResponse.json();
+
+  const instructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-REPORT-TRACE-001',
+      },
+      travel_rule_record_id: travelRuleRecord.record_id,
+      debtor_account: {
+        proxy: { identification: '0xtraceabilitydebit' },
+      },
+      creditor_account: {
+        proxy: { identification: '0xtraceabilitycredit' },
+      },
+      interbank_settlement_amount: {
+        amount: '1800.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(instructionResponse.statusCode, 201);
+  const instruction = instructionResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FINAL');
+
+  const notificationsResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/notifications?instruction_id=${instruction.instruction_id}`,
+  });
+
+  assert.equal(notificationsResponse.statusCode, 200);
+  assert.equal(notificationsResponse.json().total_matched, 2);
+  const notification = notificationsResponse.json().notifications[0];
+  assert.equal(notification.travel_rule_record_id, travelRuleRecord.record_id);
+  assert.equal(
+    notification.traceability.resource_paths.travel_rule_record,
+    `/travel-rule/${travelRuleRecord.record_id}`,
+  );
+
+  const notificationDetailResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/notifications/${notification.notification_id}`,
+  });
+
+  assert.equal(notificationDetailResponse.statusCode, 200);
+  assert.equal(
+    notificationDetailResponse.json().traceability.instruction_id,
+    instruction.instruction_id,
+  );
+  assert.equal(
+    notificationDetailResponse.json().traceability.travel_rule_record_id,
+    travelRuleRecord.record_id,
+  );
+
+  const statementsResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/statements?instruction_id=${instruction.instruction_id}`,
+  });
+
+  assert.equal(statementsResponse.statusCode, 200);
+  assert.equal(statementsResponse.json().total_matched, 2);
+  const statement = statementsResponse.json().statements[0];
+  assert.equal(statement.travel_rule_record_id, travelRuleRecord.record_id);
+  assert.equal(statement.statement_scope.source_notification_count, 1);
+
+  const statementDetailResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/statements/${statement.statement_id}`,
+  });
+
+  assert.equal(statementDetailResponse.statusCode, 200);
+  assert.equal(
+    statementDetailResponse.json().traceability.resource_paths.reporting_statement,
+    `/reporting/statements/${statement.statement_id}`,
+  );
+  assert.equal(
+    statementDetailResponse.json().traceability.resource_paths.travel_rule_record,
+    `/travel-rule/${travelRuleRecord.record_id}`,
+  );
+  assert.equal(
+    statementDetailResponse.json().statement_scope.source_notification_ids.length,
+    1,
+  );
 
   await app.close();
 });

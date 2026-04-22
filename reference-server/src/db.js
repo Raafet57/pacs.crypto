@@ -632,6 +632,7 @@ function getDebitNotificationTriggerStatus(debitTiming) {
 function buildReportingNotificationRecord(record, notificationKind, chainAdapter) {
   const isDebit = notificationKind === 'DEBTOR_DEBIT';
   const accountRole = isDebit ? 'DEBTOR' : 'CREDITOR';
+  const notificationId = randomUUID();
   const party = isDebit ? record.debtor : record.creditor;
   const counterparty = isDebit ? record.creditor : record.debtor;
   const partyAccount = isDebit ? record.debtor_account : record.creditor_account;
@@ -644,7 +645,7 @@ function buildReportingNotificationRecord(record, notificationKind, chainAdapter
   const bookingDateTime = chainAdapter.getLifecycleTimestamp(record, triggerStatus);
 
   return {
-    notification_id: randomUUID(),
+    notification_id: notificationId,
     message_family: 'camt.054_analogue',
     notification_type: 'BOOKED_ENTRY',
     entry_type: isDebit ? 'DEBIT' : 'CREDIT',
@@ -691,7 +692,86 @@ function buildReportingNotificationRecord(record, notificationKind, chainAdapter
     token: record.blockchain_instruction?.token ?? null,
     transaction_hash: record.on_chain_settlement?.transaction_hash ?? null,
     remittance_information: record.remittance_information ?? null,
+    traceability: buildReportingTraceability({
+      instructionId: record.instruction_id,
+      uetr: record.uetr,
+      endToEndIdentification:
+        record.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: record.travel_rule_record_id,
+      transactionHash: record.on_chain_settlement?.transaction_hash ?? null,
+      accountRole,
+      notificationId,
+    }),
     created_at: nowIso(),
+  };
+}
+
+function buildReportingResourcePaths({
+  instructionId,
+  accountRole = null,
+  notificationId = null,
+  statementId = null,
+  travelRuleRecordId = null,
+}) {
+  const instructionQuery = new URLSearchParams({ instruction_id: instructionId });
+  if (accountRole) {
+    instructionQuery.set('account_role', accountRole);
+  }
+
+  return {
+    instruction: `/instruction/${instructionId}`,
+    execution_status: `/execution-status/${instructionId}`,
+    finality_receipt: `/finality-receipt/${instructionId}`,
+    reporting_notifications: `/reporting/notifications?${instructionQuery.toString()}`,
+    reporting_statements: `/reporting/statements?${instructionQuery.toString()}`,
+    ...(notificationId
+      ? {
+          reporting_notification: `/reporting/notifications/${notificationId}`,
+        }
+      : {}),
+    ...(statementId
+      ? {
+          reporting_statement: `/reporting/statements/${statementId}`,
+        }
+      : {}),
+    ...(travelRuleRecordId
+      ? {
+          travel_rule_record: `/travel-rule/${travelRuleRecordId}`,
+        }
+      : {}),
+  };
+}
+
+function buildReportingTraceability({
+  instructionId,
+  uetr,
+  endToEndIdentification,
+  travelRuleRecordId = null,
+  transactionHash = null,
+  accountRole = null,
+  notificationId = null,
+  statementId = null,
+  sourceNotificationIds = [],
+}) {
+  return {
+    instruction_id: instructionId,
+    uetr,
+    end_to_end_identification: endToEndIdentification ?? null,
+    travel_rule_record_id: travelRuleRecordId,
+    transaction_hash: transactionHash,
+    account_role: accountRole,
+    ...(notificationId ? { notification_id: notificationId } : {}),
+    ...(statementId ? { statement_id: statementId } : {}),
+    ...(sourceNotificationIds.length
+      ? { source_notification_ids: sourceNotificationIds }
+      : {}),
+    resource_paths: buildReportingResourcePaths({
+      instructionId,
+      accountRole,
+      notificationId,
+      statementId,
+      travelRuleRecordId,
+    }),
   };
 }
 
@@ -705,13 +785,27 @@ function buildReportingNotificationSummary(record) {
     instruction_id: record.instruction_id,
     uetr: record.uetr,
     end_to_end_identification: record.end_to_end_identification,
+    travel_rule_record_id: record.travel_rule_record_id ?? null,
     party_name: record.party?.name ?? null,
     counterparty_name: record.counterparty?.name ?? null,
+    wallet_address: record.party?.wallet_address ?? null,
+    counterparty_wallet_address: record.counterparty?.wallet_address ?? null,
     amount: record.settlement_amount?.amount ?? null,
     currency: record.settlement_amount?.currency ?? null,
     token_symbol: record.token?.token_symbol ?? null,
     chain_dli: record.chain_dli,
     transaction_hash: record.transaction_hash,
+    traceability:
+      record.traceability ??
+      buildReportingTraceability({
+        instructionId: record.instruction_id,
+        uetr: record.uetr,
+        endToEndIdentification: record.end_to_end_identification,
+        travelRuleRecordId: record.travel_rule_record_id ?? null,
+        transactionHash: record.transaction_hash ?? null,
+        accountRole: record.account_role ?? null,
+        notificationId: record.notification_id,
+      }),
   };
 }
 
@@ -734,7 +828,12 @@ function buildReportingStatementKey(record, accountRole) {
   });
 }
 
-function buildReportingStatementRecord(record, notifications, accountRole) {
+function buildReportingStatementRecord(
+  record,
+  notifications,
+  accountRole,
+  statementId = randomUUID(),
+) {
   if (!notifications.length) {
     return null;
   }
@@ -756,17 +855,29 @@ function buildReportingStatementRecord(record, notifications, accountRole) {
   const openingBalance = 0;
   const closingBalance = creditTotal - debitTotal;
   const period = buildStatementPeriod(orderedNotifications);
+  const sourceNotificationIds = orderedNotifications.map(
+    (notification) => notification.notification_id,
+  );
 
   return {
-    statement_id: randomUUID(),
+    statement_id: statementId,
     statement_key: buildReportingStatementKey(record, accountRole),
     message_family: 'camt.053_analogue',
     statement_type: 'ACCOUNT_STATEMENT',
     instruction_id: record.instruction_id,
     uetr: record.uetr,
     account_role: accountRole,
+    travel_rule_record_id: record.travel_rule_record_id ?? null,
     statement_date: period.from ? period.from.slice(0, 10) : record.created_at.slice(0, 10),
     period,
+    statement_scope: {
+      derivation_basis: 'BOOKED_NOTIFICATIONS',
+      account_role: accountRole,
+      source_notification_count: sourceNotificationIds.length,
+      source_notification_ids: sourceNotificationIds,
+      booking_date_time_from: period.from,
+      booking_date_time_to: period.to,
+    },
     party: orderedNotifications[0]?.party ?? null,
     counterparty: orderedNotifications[0]?.counterparty ?? null,
     chain_dli: orderedNotifications[0]?.chain_dli ?? null,
@@ -778,6 +889,8 @@ function buildReportingStatementRecord(record, notifications, accountRole) {
       debit_timing: record.debit_timing ?? null,
       end_to_end_identification:
         record.payment_identification?.end_to_end_identification ?? null,
+      travel_rule_record_id: record.travel_rule_record_id ?? null,
+      related_notification_count: sourceNotificationIds.length,
     },
     balance_summary: {
       opening_balance: {
@@ -800,6 +913,17 @@ function buildReportingStatementRecord(record, notifications, accountRole) {
       net_total: formatDecimalAmount(closingBalance),
     },
     entries: summaryNotifications,
+    traceability: buildReportingTraceability({
+      instructionId: record.instruction_id,
+      uetr: record.uetr,
+      endToEndIdentification:
+        record.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: record.travel_rule_record_id ?? null,
+      transactionHash: record.on_chain_settlement?.transaction_hash ?? null,
+      accountRole,
+      statementId,
+      sourceNotificationIds,
+    }),
     created_at: nowIso(),
     updated_at: nowIso(),
   };
@@ -814,6 +938,7 @@ function buildReportingStatementSummary(record) {
     instruction_id: record.instruction_id,
     uetr: record.uetr,
     account_role: record.account_role,
+    travel_rule_record_id: record.travel_rule_record_id ?? null,
     wallet_address: record.party?.wallet_address ?? null,
     party_name: record.party?.name ?? null,
     counterparty_name: record.counterparty?.name ?? null,
@@ -823,7 +948,22 @@ function buildReportingStatementSummary(record) {
     balance_summary: record.balance_summary,
     movement_summary: record.movement_summary,
     period: record.period,
+    statement_scope: record.statement_scope ?? null,
     instruction_context: record.instruction_context,
+    traceability:
+      record.traceability ??
+      buildReportingTraceability({
+        instructionId: record.instruction_id,
+        uetr: record.uetr,
+        endToEndIdentification:
+          record.instruction_context?.end_to_end_identification ?? null,
+        travelRuleRecordId: record.travel_rule_record_id ?? null,
+        transactionHash: record.transaction_hash ?? null,
+        accountRole: record.account_role ?? null,
+        statementId: record.statement_id,
+        sourceNotificationIds:
+          record.statement_scope?.source_notification_ids ?? [],
+      }),
     created_at: record.created_at,
     updated_at: record.updated_at,
   };
@@ -891,8 +1031,20 @@ function buildIntradayAccountViews(records) {
       wallet_address: record.party?.wallet_address ?? null,
       chain_dli: record.chain_dli ?? null,
       notifications: [],
+      instructionIds: new Set(),
+      uetrs: new Set(),
+      travelRuleRecordIds: new Set(),
+      transactionHashes: new Set(),
     };
     existing.notifications.push(record);
+    existing.instructionIds.add(record.instruction_id);
+    existing.uetrs.add(record.uetr);
+    if (record.travel_rule_record_id) {
+      existing.travelRuleRecordIds.add(record.travel_rule_record_id);
+    }
+    if (record.transaction_hash) {
+      existing.transactionHashes.add(record.transaction_hash);
+    }
     accountMap.set(key, existing);
   }
 
@@ -903,6 +1055,10 @@ function buildIntradayAccountViews(records) {
     wallet_address: entry.wallet_address,
     chain_dli: entry.chain_dli,
     notification_count: entry.notifications.length,
+    instruction_ids: Array.from(entry.instructionIds),
+    uetrs: Array.from(entry.uetrs),
+    travel_rule_record_ids: Array.from(entry.travelRuleRecordIds),
+    transaction_hashes: Array.from(entry.transactionHashes),
     movement_totals: buildReportingMovementTotals(entry.notifications),
   }));
 }
@@ -1367,8 +1523,8 @@ export class ReferenceStore {
     const records = rows.map((row) => parseJson(row.record_json, null)).filter(Boolean);
     const statuses = parseListFilter(filters.status);
     const callbackStatuses = parseListFilter(filters.callback_status);
-
-    return records.filter((record) => {
+    const filtered = records.filter((record) => {
+      const data = getTravelRuleData(record);
       if (statuses.length && !statuses.includes(record.status)) {
         return false;
       }
@@ -1414,6 +1570,13 @@ export class ReferenceStore {
         return false;
       }
 
+      if (
+        filters.currency &&
+        data.interbank_settlement_amount?.currency !== filters.currency
+      ) {
+        return false;
+      }
+
       const tokenIdentification = getTravelRuleTokenIdentification(record);
       if (
         filters.token_identifier &&
@@ -1450,8 +1613,51 @@ export class ReferenceStore {
         }
       }
 
+      if (
+        filters.debtor_wallet &&
+        data.debtor_account?.proxy?.identification !== filters.debtor_wallet
+      ) {
+        return false;
+      }
+
+      if (
+        filters.creditor_wallet &&
+        data.creditor_account?.proxy?.identification !== filters.creditor_wallet
+      ) {
+        return false;
+      }
+
       return true;
     });
+
+    const sort = filters.sort ?? 'submitted_at_desc';
+    filtered.sort((left, right) => {
+      if (sort === 'amount_asc' || sort === 'amount_desc') {
+        const leftAmount = Number.parseFloat(
+          getTravelRuleData(left).interbank_settlement_amount?.amount ?? '0',
+        );
+        const rightAmount = Number.parseFloat(
+          getTravelRuleData(right).interbank_settlement_amount?.amount ?? '0',
+        );
+        if (leftAmount !== rightAmount) {
+          return sort === 'amount_asc'
+            ? leftAmount - rightAmount
+            : rightAmount - leftAmount;
+        }
+      } else {
+        const leftSubmittedAt = Date.parse(left.submitted_at);
+        const rightSubmittedAt = Date.parse(right.submitted_at);
+        if (leftSubmittedAt !== rightSubmittedAt) {
+          return sort === 'submitted_at_asc'
+            ? leftSubmittedAt - rightSubmittedAt
+            : rightSubmittedAt - leftSubmittedAt;
+        }
+      }
+
+      return left.record_id.localeCompare(right.record_id);
+    });
+
+    return filtered;
   }
 
   searchTravelRuleResponse(filters = {}) {
@@ -2140,20 +2346,21 @@ export class ReferenceStore {
     }
 
     for (const [accountRole, groupedNotifications] of notificationGroups.entries()) {
+      const statementKey = buildReportingStatementKey(record, accountRole);
+      const existing = this.getReportingStatementByKey(statementKey);
       const statement = buildReportingStatementRecord(
         record,
         groupedNotifications,
         accountRole,
+        existing?.statement_id,
       );
       if (!statement) {
         continue;
       }
 
-      const existing = this.getReportingStatementByKey(statement.statement_key);
       const persistedStatement = existing
         ? {
             ...statement,
-            statement_id: existing.statement_id,
             created_at: existing.created_at ?? statement.created_at,
           }
         : statement;
@@ -2333,6 +2540,21 @@ export class ReferenceStore {
     const records = this.filterReportingNotificationRecords(filters);
     const debitRecords = records.filter((record) => record.entry_type === 'DEBIT');
     const creditRecords = records.filter((record) => record.entry_type === 'CREDIT');
+    const instructionIds = Array.from(
+      new Set(records.map((record) => record.instruction_id).filter(Boolean)),
+    );
+    const uetrs = Array.from(
+      new Set(records.map((record) => record.uetr).filter(Boolean)),
+    );
+    const travelRuleRecordIds = Array.from(
+      new Set(
+        records.map((record) => record.travel_rule_record_id).filter(Boolean),
+      ),
+    );
+    const transactionHashes = Array.from(
+      new Set(records.map((record) => record.transaction_hash).filter(Boolean)),
+    );
+    const representativeRecord = records[0] ?? null;
 
     return {
       period: {
@@ -2348,6 +2570,24 @@ export class ReferenceStore {
         token_dti: filters.token_dti ?? null,
       },
       generated_at: nowIso(),
+      traceability:
+        representativeRecord && instructionIds.length === 1
+          ? buildReportingTraceability({
+              instructionId: representativeRecord.instruction_id,
+              uetr: representativeRecord.uetr,
+              endToEndIdentification:
+                representativeRecord.end_to_end_identification ?? null,
+              travelRuleRecordId:
+                representativeRecord.travel_rule_record_id ?? null,
+              transactionHash:
+                representativeRecord.transaction_hash ?? null,
+            })
+          : {
+              instruction_ids: instructionIds,
+              uetrs,
+              travel_rule_record_ids: travelRuleRecordIds,
+              transaction_hashes: transactionHashes,
+            },
       movement_summary: {
         notification_count: records.length,
         debit_count: debitRecords.length,

@@ -39,6 +39,7 @@ const CHAIN_DLI_PATTERN = /^[A-Z0-9]{9}$/;
 const TOKEN_DTI_PATTERN = /^[A-Z0-9]{9}$/;
 const LEI_PATTERN = /^[A-Z0-9]{18}[0-9]{2}$/;
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
+const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 const MAX_SLIPPAGE_PATTERN = /^0*(\d{0,2}\.\d{1,8}|\d{0,3})$/;
 
 const WEBHOOK_EVENT_TYPES = new Set([
@@ -57,6 +58,21 @@ const TRAVEL_RULE_CALLBACK_STATUSES = new Set([
   'ACCEPTED',
   'REJECTED',
   'UNDER_REVIEW',
+]);
+
+const TRAVEL_RULE_CALLBACK_FILTER_STATUSES = new Set([
+  'PENDING',
+  'ACCEPTED',
+  'REJECTED',
+  'UNDER_REVIEW',
+]);
+
+const TRAVEL_RULE_RECORD_STATUSES = new Set([
+  'SUBMITTED',
+  'ACCEPTED',
+  'REJECTED',
+  'UNDER_REVIEW',
+  'ARCHIVED',
 ]);
 
 const TRAVEL_RULE_WALLET_TYPES = new Set([
@@ -84,6 +100,19 @@ const CHARGE_BEARERS = new Set([
   'SLEV',
 ]);
 
+const INSTRUCTION_STATUSES = new Set([
+  'PENDING',
+  'QUOTED',
+  'BROADCAST',
+  'CONFIRMING',
+  'FINAL',
+  'FAILED',
+  'CANCELLED',
+  'EXPIRED',
+  'SLIPPAGE_EXCEEDED',
+  'RAMP_FAILED',
+]);
+
 const STATS_DIRECTIONS = new Set([
   'OUTGOING',
   'INCOMING',
@@ -101,6 +130,13 @@ const STATS_GROUP_BY = new Set([
   'rejection_reason_code',
 ]);
 
+const TRAVEL_RULE_SEARCH_SORTS = new Set([
+  'submitted_at_asc',
+  'submitted_at_desc',
+  'amount_asc',
+  'amount_desc',
+]);
+
 const CALLBACK_REJECTION_CODES = new Set([
   'MISSING_MANDATORY_FIELD',
   'MISSING_CONDITIONAL_FIELD',
@@ -113,6 +149,24 @@ const CALLBACK_REJECTION_CODES = new Set([
 
 function pushError(errors, field, message) {
   errors.push({ field, message });
+}
+
+function parseQueryList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => String(item).split(','))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 function validateRequiredField(errors, condition, field, message) {
@@ -170,6 +224,76 @@ function validateUuidField(errors, value, field) {
 
 function validateTextField(errors, value, field, message) {
   validateRequiredField(errors, hasText(value), field, message);
+}
+
+function validateEnumListField(errors, value, allowedValues, field, label) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  const values = parseQueryList(value);
+  if (values.length === 0) {
+    pushError(errors, field, `${field} must contain at least one value.`);
+    return;
+  }
+
+  for (const entry of values) {
+    if (!allowedValues.has(entry)) {
+      pushError(
+        errors,
+        field,
+        `${label} must contain only: ${Array.from(allowedValues).join(', ')}.`,
+      );
+      return;
+    }
+  }
+}
+
+function validateIntegerRangeField(errors, value, field, { min, max }) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  const raw = String(value);
+  if (!/^\d+$/.test(raw)) {
+    pushError(errors, field, `${field} must be an integer.`);
+    return;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (parsed < min || parsed > max) {
+    pushError(errors, field, `${field} must be between ${min} and ${max}.`);
+  }
+}
+
+function validateDecimalField(errors, value, field) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(String(value))) {
+    pushError(errors, field, `${field} must be a positive decimal number.`);
+  }
+}
+
+function validateCursorField(errors, value, field) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  if (!hasText(value)) {
+    pushError(errors, field, `${field} must be a non-empty string.`);
+  }
+}
+
+function validateDateRange(errors, fromValue, toValue, fromField, toField) {
+  if (!isIsoDateTime(fromValue) || !isIsoDateTime(toValue)) {
+    return;
+  }
+
+  if (Date.parse(fromValue) > Date.parse(toValue)) {
+    pushError(errors, fromField, `${fromField} must be earlier than or equal to ${toField}.`);
+  }
 }
 
 function validateParty(errors, value, field) {
@@ -648,6 +772,13 @@ export function validateTravelRuleStatsQuery(query) {
   const errors = [];
   validateDateTimeField(errors, query.submitted_from, 'submitted_from', true);
   validateDateTimeField(errors, query.submitted_to, 'submitted_to', true);
+  validateDateRange(
+    errors,
+    query.submitted_from,
+    query.submitted_to,
+    'submitted_from',
+    'submitted_to',
+  );
   validateEnumField(
     errors,
     query.direction,
@@ -662,6 +793,111 @@ export function validateTravelRuleStatsQuery(query) {
     'group_by',
     'group_by',
   );
+  return errors;
+}
+
+export function validateTravelRuleSearchQuery(query) {
+  const errors = [];
+  validateEnumField(
+    errors,
+    query.direction,
+    STATS_DIRECTIONS,
+    'direction',
+    'direction',
+  );
+  validateDateTimeField(errors, query.submitted_from, 'submitted_from');
+  validateDateTimeField(errors, query.submitted_to, 'submitted_to');
+  validateDateRange(
+    errors,
+    query.submitted_from,
+    query.submitted_to,
+    'submitted_from',
+    'submitted_to',
+  );
+  validateEnumListField(
+    errors,
+    query.status,
+    TRAVEL_RULE_RECORD_STATUSES,
+    'status',
+    'status',
+  );
+  validateEnumListField(
+    errors,
+    query.callback_status,
+    TRAVEL_RULE_CALLBACK_FILTER_STATUSES,
+    'callback_status',
+    'callback_status',
+  );
+  validateEnumField(
+    errors,
+    query.submission_timing,
+    TRAVEL_RULE_SUBMISSION_TIMINGS,
+    'submission_timing',
+    'submission_timing',
+  );
+  validatePatternField(
+    errors,
+    query.currency,
+    CURRENCY_CODE_PATTERN,
+    'currency',
+    'currency must be a 3-letter uppercase ISO 4217 code.',
+  );
+  validatePatternField(
+    errors,
+    query.counterparty_vasp_lei,
+    LEI_PATTERN,
+    'counterparty_vasp_lei',
+    'counterparty_vasp_lei must be a valid LEI.',
+  );
+  validateEnumField(
+    errors,
+    query.wallet_type,
+    TRAVEL_RULE_WALLET_TYPES,
+    'wallet_type',
+    'wallet_type',
+  );
+  validateDecimalField(errors, query.amount_min, 'amount_min');
+  validateDecimalField(errors, query.amount_max, 'amount_max');
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
+  validateCursorField(errors, query.after, 'after');
+  validateEnumField(
+    errors,
+    query.sort,
+    TRAVEL_RULE_SEARCH_SORTS,
+    'sort',
+    'sort',
+  );
+  return errors;
+}
+
+export function validateInstructionSearchQuery(query) {
+  const errors = [];
+  validateDateTimeField(errors, query.from, 'from');
+  validateDateTimeField(errors, query.to, 'to');
+  validateDateRange(errors, query.from, query.to, 'from', 'to');
+  validateEnumListField(
+    errors,
+    query.status,
+    INSTRUCTION_STATUSES,
+    'status',
+    'status',
+  );
+  validatePatternField(
+    errors,
+    query.chain_dli,
+    CHAIN_DLI_PATTERN,
+    'chain_dli',
+    'chain_dli must be a 9-character uppercase DLI value.',
+  );
+  validatePatternField(
+    errors,
+    query.token_dti,
+    TOKEN_DTI_PATTERN,
+    'token_dti',
+    'token_dti must be a 9-character uppercase DTI value.',
+  );
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 500 });
+  validateCursorField(errors, query.cursor, 'cursor');
   return errors;
 }
 

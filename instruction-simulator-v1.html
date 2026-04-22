@@ -1053,6 +1053,34 @@ function renderReportingNotificationSummary(notification) {
       </div>
       <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">
         ${escapeHtml(notification?.chain_dli || '—')} · ${escapeHtml(notification?.transaction_hash || '—')}
+        ${notification?.travel_rule_record_id ? ` · TR ${escapeHtml(truncateMid(notification.travel_rule_record_id, 8, 6))}` : ''}
+      </div>
+    </div>`;
+}
+
+function renderTraceabilityCard(traceability, title = 'Traceability') {
+  if (!traceability) {
+    return '';
+  }
+
+  const resourcePaths = Object.entries(traceability.resource_paths || {}).filter(([, value]) => Boolean(value));
+  return `
+    <div class="card">
+      <div class="ch"><span>🧷</span><span class="ct">${escapeHtml(title)}</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(traceability.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(traceability.uetr || '—')}</div></div>
+        <div class="dr"><div class="dk">end_to_end_identification</div><div class="dv">${escapeHtml(traceability.end_to_end_identification || '—')}</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id</div><div class="dv">${escapeHtml(traceability.travel_rule_record_id || '—')}</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div><div class="dv addr">${escapeHtml(traceability.transaction_hash || '—')}</div></div>
+        ${Array.isArray(traceability.source_notification_ids) && traceability.source_notification_ids.length
+          ? `<div class="dr"><div class="dk">source_notification_ids</div><div class="dv">${traceability.source_notification_ids.map((id) => escapeHtml(truncateMid(id, 10, 6))).join(', ')}</div></div>`
+          : ''}
+        ${resourcePaths.length
+          ? resourcePaths.map(([key, value]) => `
+              <div class="dr"><div class="dk">${escapeHtml(key)}</div><div class="dv addr">${escapeHtml(value)}</div></div>
+            `).join('')
+          : ''}
       </div>
     </div>`;
 }
@@ -1075,6 +1103,7 @@ function renderReportingNotificationDetail(notification) {
         <div class="dr"><div class="dk">value_date_time</div><div class="dv">${escapeHtml(notification.value_date_time || '—')}</div></div>
         <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(notification.instruction_id || '—')}</div></div>
         <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(notification.uetr || '—')}</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id</div><div class="dv">${escapeHtml(notification.travel_rule_record_id || '—')}</div></div>
         <div class="dr"><div class="dk">status_reference.trigger_status</div><div class="dv">${escapeHtml(notification.status_reference?.trigger_status || '—')}</div></div>
         <div class="dr"><div class="dk">status_reference.current_instruction_status</div><div class="dv">${escapeHtml(notification.status_reference?.current_instruction_status || '—')}</div></div>
         <div class="dr"><div class="dk">party</div><div class="dv">${escapeHtml(notification.party?.name || '—')} · ${escapeHtml(notification.party?.wallet_address || '—')}</div></div>
@@ -1090,7 +1119,8 @@ function renderReportingNotificationDetail(notification) {
           ? `<div class="dr"><div class="dk">unstructured_remittance</div><div class="dv">${escapeHtml(notification.remittance_information.unstructured)}</div></div>`
           : ''}
       </div>
-    </div>`;
+    </div>
+    ${renderTraceabilityCard(notification.traceability, 'Notification Traceability')}`;
 }
 
 function renderIntradayReportingView(intradayPayload) {
@@ -1115,8 +1145,10 @@ function renderIntradayReportingView(intradayPayload) {
         <div class="dr"><div class="dk">generated_at</div><div class="dv">${escapeHtml(intradayPayload.generated_at || '—')}</div></div>
         <div class="dr"><div class="dk">period</div><div class="dv">${escapeHtml(intradayPayload.period?.from || '—')} → ${escapeHtml(intradayPayload.period?.to || '—')}</div></div>
         <div class="dr"><div class="dk">filters_applied.instruction_id</div><div class="dv hi">${escapeHtml(intradayPayload.filters_applied?.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">filters_applied.uetr</div><div class="dv">${escapeHtml(intradayPayload.filters_applied?.uetr || '—')}</div></div>
       </div>
     </div>
+    ${renderTraceabilityCard(intradayPayload.traceability, 'Intraday Traceability')}
     <div class="card">
       <div class="ch"><span>💱</span><span class="ct">Movement Totals</span></div>
       <div class="cb">
@@ -1153,10 +1185,72 @@ function renderIntradayReportingView(intradayPayload) {
                 `${escapeHtml(movement.currency || '—')}${movement.token_symbol ? `/${escapeHtml(movement.token_symbol)}` : ''}: ${escapeHtml(movement.net_total || '0')}`
               ).join(' · ') : '—'}
             </div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.6;margin-top:4px">
+              ${Array.isArray(account.instruction_ids) && account.instruction_ids.length ? `Instructions ${account.instruction_ids.map((id) => escapeHtml(truncateMid(id, 10, 6))).join(', ')}` : ''}
+              ${Array.isArray(account.travel_rule_record_ids) && account.travel_rule_record_ids.length ? ` · Travel Rule ${account.travel_rule_record_ids.map((id) => escapeHtml(truncateMid(id, 10, 6))).join(', ')}` : ''}
+            </div>
           </div>
         `).join('') : `<div style="font-size:10px;color:var(--dim)">No intraday account views.</div>`}
       </div>
     </div>`;
+}
+
+function renderReportingStatementSummary(statement) {
+  return `
+    <div class="sr-row">
+      <div class="sr-top">
+        <span class="sr-id">${escapeHtml(truncateMid(statement?.statement_id, 12, 8))}</span>
+        <span class="status-pill st-final">${escapeHtml(statement?.account_role || '—')} · ${escapeHtml(statement?.statement_type || '—')}</span>
+      </div>
+      <div class="sr-parties">
+        <span style="font-weight:500">${escapeHtml(statement?.party_name || '—')}</span>
+        <span style="color:var(--dim)">→</span>
+        <span style="font-weight:500">${escapeHtml(statement?.counterparty_name || '—')}</span>
+      </div>
+      <div class="sr-meta">
+        <span class="sr-amt">Close ${escapeHtml(statement?.balance_summary?.closing_balance?.amount || '—')} ${escapeHtml(statement?.balance_summary?.closing_balance?.currency || '')}</span>
+        <span class="dti-tag">${escapeHtml(statement?.token_symbol || '—')}</span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${escapeHtml(statement?.statement_date || '—')}</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">
+        ${escapeHtml(statement?.chain_dli || '—')} · ${escapeHtml(statement?.transaction_hash || '—')}
+        ${statement?.travel_rule_record_id ? ` · TR ${escapeHtml(truncateMid(statement.travel_rule_record_id, 8, 6))}` : ''}
+      </div>
+    </div>`;
+}
+
+function renderReportingStatementDetail(statement) {
+  if (!statement) {
+    return `<div style="font-size:10px;color:var(--dim)">No reporting statement detail available.</div>`;
+  }
+
+  const entries = Array.isArray(statement.entries) ? statement.entries : [];
+  return `
+    <div class="card">
+      <div class="ch"><span>📒</span><span class="ct">Reporting Statement Detail</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">statement_id</div><div class="dv hi">${escapeHtml(statement.statement_id || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_type</div><div class="dv">${escapeHtml(statement.statement_type || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_date</div><div class="dv">${escapeHtml(statement.statement_date || '—')}</div></div>
+        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(statement.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(statement.uetr || '—')}</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id</div><div class="dv">${escapeHtml(statement.travel_rule_record_id || '—')}</div></div>
+        <div class="dr"><div class="dk">period</div><div class="dv">${escapeHtml(statement.period?.from || '—')} → ${escapeHtml(statement.period?.to || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_scope.derivation_basis</div><div class="dv">${escapeHtml(statement.statement_scope?.derivation_basis || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_scope.source_notification_count</div><div class="dv">${escapeHtml(statement.statement_scope?.source_notification_count ?? '—')}</div></div>
+        <div class="dr"><div class="dk">closing_balance</div><div class="dv wa">${escapeHtml(statement.balance_summary?.closing_balance?.amount || '—')} ${escapeHtml(statement.balance_summary?.closing_balance?.currency || '')}</div></div>
+        <div class="dr"><div class="dk">net_total</div><div class="dv">${escapeHtml(statement.movement_summary?.net_total || '—')}</div></div>
+        <div class="dr"><div class="dk">finality_status</div><div class="dv">${escapeHtml(statement.instruction_context?.finality_status || '—')}</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div><div class="dv addr">${escapeHtml(statement.transaction_hash || '—')}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>🧾</span><span class="ct">Statement Entries</span></div>
+      <div class="cb">
+        ${entries.length ? entries.map((entry) => renderReportingNotificationSummary(entry)).join('') : `<div style="font-size:10px;color:var(--dim)">No statement entries.</div>`}
+      </div>
+    </div>
+    ${renderTraceabilityCard(statement.traceability, 'Statement Traceability')}`;
 }
 
 function renderLiveReadResponse(referenceValue, resolved, instructionPayload, executionStatusPayload, finalityPayload, reportingBundle, elapsed) {
@@ -1177,12 +1271,26 @@ function renderLiveReadResponse(referenceValue, resolved, instructionPayload, ex
   const notificationsResponse = reportingBundle?.notificationsResponse;
   const intradayResponse = reportingBundle?.intradayResponse;
   const notificationDetailResponse = reportingBundle?.notificationDetailResponse;
+  const statementsResponse = reportingBundle?.statementsResponse;
+  const statementDetailResponse = reportingBundle?.statementDetailResponse;
   const notifications = Array.isArray(notificationsResponse?.payload?.notifications)
     ? notificationsResponse.payload.notifications
     : [];
+  const statements = Array.isArray(statementsResponse?.payload?.statements)
+    ? statementsResponse.payload.statements
+    : [];
   const hasReportingContent = Boolean(
-    notificationsResponse?.ok || intradayResponse?.ok || notificationDetailResponse?.ok
+    notificationsResponse?.ok ||
+    intradayResponse?.ok ||
+    notificationDetailResponse?.ok ||
+    statementsResponse?.ok ||
+    statementDetailResponse?.ok
   );
+  const reportingTraceability =
+    notificationDetailResponse?.payload?.traceability ||
+    statementDetailResponse?.payload?.traceability ||
+    intradayResponse?.payload?.traceability ||
+    null;
 
   document.getElementById('rh').innerHTML =
     `<span class="sbadge s200">200</span>
@@ -1203,6 +1311,8 @@ function renderLiveReadResponse(referenceValue, resolved, instructionPayload, ex
           <div class="dr"><div class="dk">execution_mode</div><div class="dv ok">LIVE API</div></div>
         </div>
       </div>
+
+      ${reportingTraceability ? renderTraceabilityCard(reportingTraceability, 'End-to-End Traceability') : ''}
 
       <div class="card" style="border-color:${status === 'FINAL' ? 'rgba(63,185,80,.3)' : 'rgba(56,139,253,.25)'}">
         <div class="ch" style="background:${status === 'FINAL' ? 'rgba(63,185,80,.04)' : 'rgba(56,139,253,.05)'}">
@@ -1269,6 +1379,22 @@ function renderLiveReadResponse(referenceValue, resolved, instructionPayload, ex
           </div>
           ${notificationDetailResponse?.ok ? renderReportingNotificationDetail(notificationDetailResponse.payload) : ''}
           ${intradayResponse?.ok ? renderIntradayReportingView(intradayResponse.payload) : ''}
+          <div class="card">
+            <div class="ch"><span>📚</span><span class="ct">Reporting Statements</span></div>
+            <div class="cb">
+              ${statementsResponse?.ok ? `
+                <div class="dr"><div class="dk">total_matched</div><div class="dv ok">${escapeHtml(statementsResponse.payload?.total_matched ?? '0')}</div></div>
+                <div class="dr"><div class="dk">page_size</div><div class="dv">${escapeHtml(statementsResponse.payload?.page_size ?? '0')}</div></div>
+                <div class="dr"><div class="dk">generated_at</div><div class="dv">${escapeHtml(statementsResponse.payload?.generated_at || '—')}</div></div>
+              ` : `
+                <div class="dr"><div class="dk">statements_status</div><div class="dv er">Reporting statements unavailable</div></div>
+              `}
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+                ${statements.length ? statements.map(renderReportingStatementSummary).join('') : `<div style="font-size:10px;color:var(--dim)">No reporting statements returned.</div>`}
+              </div>
+            </div>
+          </div>
+          ${statementDetailResponse?.ok ? renderReportingStatementDetail(statementDetailResponse.payload) : ''}
         `
         : `
           ${renderJsonPayloadCard('📦', 'Instruction Payload', instructionPayload)}
@@ -1385,17 +1511,26 @@ async function sendLiveRequest(req) {
 
       if (hasReportingView) {
         const instructionIdParam = encodeURIComponent(resolved.instructionId);
-        const notificationsResponse = await requestJson(`${base}/reporting/notifications?instruction_id=${instructionIdParam}`);
-        const intradayResponse = await requestJson(`${base}/reporting/intraday?instruction_id=${instructionIdParam}`);
+        const [notificationsResponse, intradayResponse, statementsResponse] = await Promise.all([
+          requestJson(`${base}/reporting/notifications?instruction_id=${instructionIdParam}`),
+          requestJson(`${base}/reporting/intraday?instruction_id=${instructionIdParam}`),
+          requestJson(`${base}/reporting/statements?instruction_id=${instructionIdParam}`)
+        ]);
         const firstNotificationId = notificationsResponse.payload?.notifications?.[0]?.notification_id;
+        const firstStatementId = statementsResponse.payload?.statements?.[0]?.statement_id;
         const notificationDetailResponse = firstNotificationId
           ? await requestJson(`${base}/reporting/notifications/${encodeURIComponent(firstNotificationId)}`)
+          : null;
+        const statementDetailResponse = firstStatementId
+          ? await requestJson(`${base}/reporting/statements/${encodeURIComponent(firstStatementId)}`)
           : null;
 
         reportingBundle = {
           notificationsResponse,
           intradayResponse,
           notificationDetailResponse,
+          statementsResponse,
+          statementDetailResponse,
         };
       }
 

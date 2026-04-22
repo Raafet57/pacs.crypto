@@ -1,6 +1,7 @@
 import {
   formatValidationErrors,
   validateTravelRuleCallback,
+  validateTravelRuleSearchQuery,
   validateTravelRuleStatsQuery,
   validateTravelRuleSubmission,
 } from '../validators.js';
@@ -25,7 +26,11 @@ export function registerTravelRuleRoutes(app) {
     return reply.code(201).send(record);
   });
 
-  app.get('/travel-rule/search', async (request) => {
+  app.get('/travel-rule/search', async (request, reply) => {
+    const errors = validateTravelRuleSearchQuery(request.query);
+    if (errors.length) {
+      return sendValidationError(reply, errors);
+    }
     return app.store.searchTravelRuleResponse(request.query);
   });
 

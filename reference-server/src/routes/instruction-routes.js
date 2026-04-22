@@ -1,5 +1,6 @@
 import {
   formatValidationErrors,
+  validateInstructionSearchQuery,
   validateInstructionSubmission,
   validateQuoteRequest,
 } from '../validators.js';
@@ -125,7 +126,12 @@ export function registerInstructionRoutes(app) {
     });
   });
 
-  app.get('/instruction/search', async (request) => {
+  app.get('/instruction/search', async (request, reply) => {
+    const errors = validateInstructionSearchQuery(request.query);
+    if (errors.length) {
+      return sendValidationError(reply, errors);
+    }
+
     return app.store.searchInstructions(request.query);
   });
 }
