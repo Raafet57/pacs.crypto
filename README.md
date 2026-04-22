@@ -14,6 +14,57 @@ The project is offered as a **community proposal**, not a finished standard. The
 
 ---
 
+## Current Direction
+
+The project is now being taken in a more execution-oriented direction: not just a family of proposal specs, but an **executable reference stack** for a bank-to-VASP blockchain payment flow. The current implementation wedge is intentionally narrow:
+
+- one asset: USDC
+- one chain family: EVM
+- one corridor: bank → sending VASP → on-chain transfer → receiving VASP
+- linked Travel Rule record + remittance information + instruction lifecycle
+
+This repo therefore has two parallel layers:
+
+- **specification layer** — the YAML specs and standalone simulators at the repo root
+- **reference implementation layer** — the live server under `reference-server/`
+
+The near-term goal is to prove that the existing specs survive real request validation, persistence, state transitions, and on-chain lifecycle handling before the family expands further.
+
+### Reference Stack Status
+
+The first executable slice lives in `reference-server/` and currently supports:
+
+- Travel Rule submit, update, callback, retrieval, search, and stats
+- instruction quote, submission, retrieval, cancellation, and search
+- pacs.002-like execution status read endpoints by `instruction_id` and `uetr`
+- camt.025-like finality receipt read endpoints by `instruction_id` and `uetr`
+- event outbox endpoints that mirror execution-status and finality-receipt payloads for webhook-style delivery
+- webhook endpoint registration, signed delivery attempts, and retry logs on top of the outbox
+- `camt.054`-like reporting notifications for booked debit and credit entries
+- `camt.052`-like intraday movement view built from the reporting notification feed
+- mocked EVM lifecycle progression: `PENDING → BROADCAST → CONFIRMING → FINAL`
+
+The two HTML simulators can still run standalone in **Demo** mode, but now also support **Live API** mode against the local reference server.
+
+### Quick Start
+
+Run the reference server:
+
+```bash
+cd reference-server
+npm install
+npm start
+```
+
+Then open either simulator locally:
+
+- `travel-rule-simulator-v3.html`
+- `instruction-simulator-v1.html`
+
+Switch **Execution Mode** to `Live API` and keep the default API base URL `http://127.0.0.1:5050`.
+
+---
+
 ## Released specifications
 
 ### Spec 1 — Travel Rule & Remittance Information API
