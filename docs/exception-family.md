@@ -1,10 +1,12 @@
 # Exception-Family Design
 
-This document makes the exception-family boundary decision-ready for the current
-`pacs.crypto` wedge.
+This document defines the exception-family boundary for the current
+`pacs.crypto` wedge and now doubles as the design note for the implemented
+first slice.
 
-It does not implement the family. It defines what the first implementation
-should be and, equally importantly, what it must not pretend to do.
+The current runtime covers `investigation_case` and `return_case` read/write
+surfaces. It does not yet implement richer bilateral cancellation or full
+remediation workflow semantics.
 
 ## Purpose
 
@@ -48,7 +50,7 @@ These behaviors stay where they are:
 
 These do **not** require a new family for the current wedge.
 
-### Becomes a new family later
+### Becomes a dedicated exception family
 
 These behaviors should become explicit exception-family objects:
 
@@ -162,9 +164,9 @@ It should **not** become the container for:
 - dispute narratives
 - bilateral cancellation negotiation after execution has started
 
-### Add a dedicated exception family later
+### Add a dedicated exception family
 
-Recommended future sub-families:
+Current first-slice runtime:
 
 - `return_case` (`pacs.004` analogue)
 - `investigation_case` (`camt.029` analogue)
@@ -272,16 +274,18 @@ If a payment has reached `FINAL`, then:
 
 This is the single most important design rule in the family.
 
-## Recommended Future Endpoints
+## Current First-Slice Endpoints
 
-When implementation starts, the first slice should likely be:
+Implemented now:
 
 - `POST /exceptions/returns`
 - `GET /exceptions/returns/:returnCaseId`
 - `GET /exceptions/returns`
+- `PATCH /exceptions/returns/:returnCaseId`
 - `POST /exceptions/investigations`
 - `GET /exceptions/investigations/:caseId`
 - `GET /exceptions/investigations`
+- `PATCH /exceptions/investigations/:caseId`
 
 Hold for later:
 
@@ -292,10 +296,13 @@ Hold for later:
 
 The same push/poll discipline should apply here as elsewhere.
 
-Recommended future event families:
+Current implemented event families:
 
 - `return_case.updated`
 - `investigation_case.updated`
+
+Optional later event family:
+
 - `cancellation_case.updated`
 
 For each event:
@@ -303,13 +310,19 @@ For each event:
 - the push payload should equal the canonical polling object
 - the transport envelope should add delivery metadata only
 
-## First Implementation Order
+## Implementation Order
 
-When this family moves from design to implementation, the order should be:
+The order used for the first slice is:
 
 1. `investigation_case`
 2. `return_case`
 3. `cancellation_case` only if bilateral orchestration really demands it
+
+Current status:
+
+- `investigation_case`: implemented first slice
+- `return_case`: implemented first slice
+- `cancellation_case`: deferred
 
 Reason:
 
@@ -320,15 +333,15 @@ Reason:
 - bilateral cancellation is the most workflow-heavy and least necessary for the
   current wedge
 
-## Issue-Ready Follow-Ups
+## Next Follow-Ups
 
-The design is ready to split into implementation issues:
+The next questions after the first slice are:
 
-1. Define `investigation_case` schema, statuses, and read/write surfaces.
-2. Define `return_case` schema with compensating-transfer semantics.
-3. Map exception-family identifiers into webhook and reporting traceability.
-4. Decide whether bilateral cancellation is actually needed before adding a
+1. Deepen `investigation_case` semantics beyond the current create/update/list/read model.
+2. Deepen `return_case` settlement semantics for compensating transfers versus off-chain refunds.
+3. Decide whether bilateral cancellation is actually needed before adding a
    `cancellation_case` family.
+4. Decide whether richer operator and reviewer demo flows need exception handling in scope.
 
 ## Non-Goals
 

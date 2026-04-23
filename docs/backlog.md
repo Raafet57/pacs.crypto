@@ -23,6 +23,7 @@ Priority: complete
 Status: `Done`
 
 - reference server with persisted Travel Rule, quote, instruction, status, finality, webhook, and reporting state
+- first-slice exception-family runtime for investigations and returns, linked to the existing instruction lifecycle and outbox/webhook model
 - live simulator support for Travel Rule and instruction flows
 - pacs.002-like status reads and camt.025-like finality reads
 - outbox-backed webhook subscriptions and signed delivery attempts
@@ -152,7 +153,7 @@ Acceptance criteria:
 - a reviewer can understand the system quickly without reading the whole codebase
 - the demo reinforces implementation credibility rather than adding more speculative scope
 
-### Epic 8 - Exception-family design
+### Epic 8 - Exception-family first slice
 Priority: `P2`
 Status: `Done`
 Depends on: stable lifecycle and identifier semantics
@@ -162,11 +163,14 @@ Work items:
 - define pre-broadcast cancellation boundaries versus post-settlement remediation
 - outline return, investigation, and richer exception-case objects
 - decide which exception behavior stays in current APIs and which becomes a new family
+- implement first-slice `investigation_case` surfaces with outbox/webhook linkage
+- implement first-slice `return_case` surfaces without rewriting original `FINAL` instructions
 
 Acceptance criteria:
 
 - exception handling is decision-ready before implementation starts
 - blockchain irreversibility is reflected honestly in the design
+- a reviewer can open, update, list, and trace investigation/return cases against the same instruction identifiers already used elsewhere
 
 ## Deferred
 

@@ -43,6 +43,7 @@ The first executable slice lives in `reference-server/` and currently supports:
 - `camt.054`-like reporting notifications for booked debit and credit entries
 - `camt.052`-like intraday movement view built from the reporting notification feed
 - `camt.053`-like statement view derived from reporting notifications and instruction context
+- first-slice exception-family endpoints for `investigation_case` and `return_case`
 - live statement and reporting traceability views in the instruction simulator
 - adapter-backed mocked EVM lifecycle progression with amount-aware fee, slippage, and finality modeling:
   `PENDING → BROADCAST → CONFIRMING → FINAL`
@@ -81,7 +82,7 @@ The active forward plan is now documented in:
 - [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
 - [`docs/architecture-note.md`](docs/architecture-note.md) — what changed architecturally once the proposal became executable
 - [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
-- [`docs/exception-family.md`](docs/exception-family.md) — decision-ready design for returns, investigations, and richer exception handling
+- [`docs/exception-family.md`](docs/exception-family.md) — implemented first-slice exception-family design and runtime boundaries
 - [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
 
 ### Current Baseline
@@ -90,7 +91,7 @@ Implemented now:
 
 - executable reference server with persistence, state transitions, and tests
 - live simulator support for the Travel Rule and instruction flows
-- status, finality, webhook, and reporting read surfaces
+- status, finality, webhook, reporting, and first-slice exception read/write surfaces
 
 Still mocked or partial:
 
@@ -184,7 +185,7 @@ The current roadmap is execution-first and narrow by design.
 
 Current priority order:
 
-1. decide whether the next real build step is first-slice exception handling or testnet execution
+1. decide whether the next real build step is deeper exception handling or testnet execution
 2. incorporate reviewer/demo feedback without widening the wedge prematurely
 3. keep broader family expansion deferred until the current stack earns it
 

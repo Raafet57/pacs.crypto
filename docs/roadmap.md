@@ -27,6 +27,9 @@ The primary audience is standards-savvy reviewers who care about message-family 
   - `reporting/notifications` (`camt.054` analogue)
   - `reporting/intraday` (`camt.052` analogue)
   - `reporting/statements` (`camt.053` analogue)
+- exception family first slice:
+  - `exceptions/investigations` (`camt.029` analogue)
+  - `exceptions/returns` (`pacs.004` analogue)
 
 ### Still mocked or partial
 
@@ -197,4 +200,4 @@ Success criteria:
 
 Current status:
 
-- exception-family design is now decision-ready in `docs/exception-family.md`, while implementation remains deferred until the current wedge needs it
+- first-slice exception handling is now implemented for the current wedge: investigations and returns have persisted read/write surfaces, outbox/webhook events, and shared identifier traceability back to instruction, finality, and Travel Rule records; broader bilateral cancellation and deeper remediation semantics remain deferred
