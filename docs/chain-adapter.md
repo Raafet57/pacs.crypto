@@ -97,3 +97,14 @@ Future testnet work should respect these rules:
 - use `adapter_metadata` for execution context rather than inventing separate per-chain status objects
 
 That is the boundary that keeps the current wedge narrow and credible.
+
+## Current Next Target
+
+The active backlog now assumes:
+
+- first real chain target: `Ethereum Sepolia`
+- first real asset: `USDC on Sepolia`
+- first real execution mode: `FULL_CUSTODY`
+
+Those defaults should be treated as the first testnet adapter target unless the
+program of record is intentionally changed.

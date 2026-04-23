@@ -4,7 +4,7 @@
 
 - `P0` means current top priority.
 - `P1` means next after `P0`.
-- `P2` means important but sequenced after the current execution wedge is hardened.
+- `P2` means important but sequenced after the current real-chain wedge is proven.
 - `P3` means deferred expansion only.
 
 Status values:
@@ -16,179 +16,126 @@ Status values:
 
 ## Baseline Already Landed
 
-These are no longer backlog items; they define the current starting point.
+These are the completed foundations for the next phase.
 
 ### Foundation stack
 Priority: complete
 Status: `Done`
 
-- reference server with persisted Travel Rule, quote, instruction, status, finality, webhook, and reporting state
-- first-slice exception-family runtime for investigations and returns, linked to the existing instruction lifecycle and outbox/webhook model
+- reference server with persisted Travel Rule, quote, instruction, status, finality, webhook, reporting, and first-slice exception state
 - live simulator support for Travel Rule and instruction flows
 - pacs.002-like status reads and camt.025-like finality reads
-- outbox-backed webhook subscriptions and signed delivery attempts
+- outbox-backed webhook subscriptions, retries, dead-letter handling, and signed delivery attempts
 - reporting notifications, intraday views, and statements
+- first-slice `investigation_case` and `return_case` runtime surfaces
+- reviewer demo package, architecture note, and sample payload pack
+
+## Active Defaults
+
+These defaults are now part of the backlog, not open questions:
+
+- first real execution target: `Ethereum Sepolia`
+- first real asset: `USDC on Sepolia`
+- first real execution mode: `FULL_CUSTODY`
+- primary audience: `Tom-facing reviewer demo`
+- implementation seam: replace adapter internals before changing public routes
+- current public status/finality/reporting/exception surfaces remain canonical
 
 ## Now
 
-### Epic 1 - Program-of-record docs
+### Epic 10 - Testnet execution
 Priority: `P0`
-Status: `Done`
-Depends on: current implementation baseline
+Status: `Planned`
+Depends on: completed chain-adapter boundary
 
 Work items:
 
-- create and maintain `docs/roadmap.md`
-- create and maintain `docs/backlog.md`
-- align `README.md` to the execution-first roadmap
-- keep a current-state summary of what is real, mocked, and deferred
+- implement a real `Sepolia USDC` adapter behind the existing chain-adapter contract
+- keep `POST /instruction`, `GET /execution-status`, and `GET /finality-receipt` route shapes unchanged
+- replace mock broadcast/finality state with real transaction submission, tracking, and confirmation reads
+- surface real execution context through existing `adapter_metadata`
+- keep the first live path restricted to `FULL_CUSTODY`
 
 Acceptance criteria:
 
-- repo-level docs describe the current state without needing code inspection
-- roadmap and backlog are treated as the canonical forward plan
-
-### Epic 2 - OpenAPI conformance layer
-Priority: `P0`
-Status: `Done`
-Depends on: existing route and test coverage
-
-Work items:
-
-- validate implemented request payloads against the YAML specs
-- add response-shape verification for implemented endpoints
-- create a documented conformance matrix for Travel Rule and instruction surfaces
-- mark unsupported features explicitly, including delegated signing
-
-Acceptance criteria:
-
-- every implemented endpoint is either conformant, partial, or explicitly out of scope
-- spec examples and runtime behavior do not drift silently
-
-### Epic 3 - Spec hardening decisions
-Priority: `P0`
-Status: `Done`
-Depends on: OpenAPI review and current route behavior
-
-Work items:
-
-- formalize Travel Rule callback lifecycle rules
-- formalize terminal instruction failure semantics
-- formalize webhook event contract and canonical payload usage
-- formalize reporting-family boundaries and identifiers
-- publish the current decision record in `docs/spec-hardening.md`
-
-Acceptance criteria:
-
-- major behavioral rules are documented, not left implicit in code
-- the repo can explain where implementation sharpened the original proposal
+- one instruction can produce a real Sepolia transaction hash through the existing instruction flow
+- `execution-status` and `finality-receipt` are populated from real chain state without route redesign
+- the same identifiers still join instruction, webhook, reporting, and exception records
+- the mock adapter remains available as a fallback/demo path
 
 ## Next
 
-### Epic 4 - Chain adapter abstraction
+### Epic 11 - Demo with real chain evidence
 Priority: `P1`
-Status: `Done`
-Depends on: stable status and finality response shapes
+Status: `Planned`
+Depends on: Epic 10
 
 Work items:
 
-- introduce a chain adapter interface for quote realism, broadcast, confirmation depth, and finality
-- move the deterministic lifecycle progression into a mock EVM adapter
-- deepen the mock adapter with amount-aware fee, slippage, and confirmation policy
-- expose adapter-derived lifecycle metadata without changing current public routes
+- update the reviewer walkthrough so one canonical scenario runs against the Sepolia adapter
+- publish one sample path with real tx hash, real confirmations, and real finality receipt output
+- distinguish clearly between `mock demo` and `real-chain demo` in docs and simulator guidance
+- keep the narrative optimized for Tom review rather than public platform packaging
 
 Acceptance criteria:
 
-- route handlers no longer own lifecycle simulation logic directly
-- later testnet work can plug into the adapter boundary
+- a reviewer can follow one bank-to-VASP happy path backed by a real Sepolia transaction
+- the live demo materials show real chain evidence without changing the message-family story
+- the repo no longer describes testnet execution as absent once Epic 10 is done
 
-### Epic 5 - Webhook delivery maturity
+### Epic 12 - Deepen exception handling
 Priority: `P1`
-Status: `Done`
-Depends on: current outbox and webhook delivery persistence
+Status: `Planned`
+Depends on: Epic 10
 
 Work items:
 
-- add background dispatch
-- persist retry schedule and next-attempt timestamps
-- add exhausted-delivery handling
-- document delivery guarantees and operational limits
+- deepen `investigation_case` statuses, transitions, and operator workflow
+- deepen `return_case` remediation semantics around real-chain versus off-chain outcomes
+- tighten linkage from exception objects to real-chain evidence and reporting consequences
+- keep bilateral cancellation deferred unless real operator flow proves it is necessary
 
 Acceptance criteria:
 
-- webhook delivery behaves like a real outbound notification subsystem
-- polling and push remain schema-aligned
-
-### Epic 6 - Reporting polish and traceability
-Priority: `P1`
-Status: `Done`
-Depends on: current reporting endpoints
-
-Work items:
-
-- tighten statement period semantics and booked-entry derivation
-- add statement visibility to simulator live mode
-- improve traceability from reporting objects back to `instruction_id`, `uetr`, tx hash, and Travel Rule references where available
-
-Acceptance criteria:
-
-- one payment can be followed cleanly from instruction submission to reporting outputs
-- reporting stays institution-facing and internally coherent
+- investigation and return cases can model post-settlement follow-up against real-chain outcomes
+- original instruction and finality records remain authoritative and are not overwritten
+- exception workflow remains a separate family rather than leaking into execution-state surfaces
 
 ## Later
 
-### Epic 7 - Demo package
+### Epic 13 - Delegated signing
 Priority: `P2`
-Status: `Done`
-Depends on: conformance layer, chain adapter boundary, webhook maturity
+Status: `Planned`
+Depends on: Epic 10 and Epic 11
 
 Work items:
 
-- produce one polished bank-to-VASP demo scenario
-- add sequence diagram and architecture note
-- add sample payload pack for the happy path
+- implement the currently stubbed delegated-signing path on the existing instruction family
+- keep the first delegated flow EVM-only and aligned to the Sepolia wedge
+- support unsigned transaction return plus signed transaction resubmission without inventing a parallel API family
+- update conformance docs and demo materials once the flow is credible
 
 Acceptance criteria:
 
-- a reviewer can understand the system quickly without reading the whole codebase
-- the demo reinforces implementation credibility rather than adding more speculative scope
-
-### Epic 8 - Exception-family first slice
-Priority: `P2`
-Status: `Done`
-Depends on: stable lifecycle and identifier semantics
-
-Work items:
-
-- define pre-broadcast cancellation boundaries versus post-settlement remediation
-- outline return, investigation, and richer exception-case objects
-- decide which exception behavior stays in current APIs and which becomes a new family
-- implement first-slice `investigation_case` surfaces with outbox/webhook linkage
-- implement first-slice `return_case` surfaces without rewriting original `FINAL` instructions
-
-Acceptance criteria:
-
-- exception handling is decision-ready before implementation starts
-- blockchain irreversibility is reflected honestly in the design
-- a reviewer can open, update, list, and trace investigation/return cases against the same instruction identifiers already used elsewhere
+- delegated signing works on the same instruction lifecycle and status/finality surfaces
+- the bank/VASP split is credible for the existing corridor
+- the flow remains narrower than a general multi-chain signing framework
 
 ## Deferred
 
-### Epic 9 - Broader family expansion
+### Epic 14 - Broader expansion
 Priority: `P3`
 Status: `Deferred`
-Depends on: completion of the current wedge
+Depends on: completion of Epics 10 through 13
 
 Deferred items:
 
-- delegated signing
-- testnet execution
 - non-EVM chains
 - tokenized assets
 - CBDC
 - regulated DeFi
-- agent-driven submission
+- agent-driven flows
 
 Rule:
 
-- none of these start before conformance, chain abstraction, webhook maturity, and demo packaging are complete
+- none of these start before real Sepolia execution, real-chain reviewer demo, deeper exception handling, and delegated signing are either implemented or explicitly superseded

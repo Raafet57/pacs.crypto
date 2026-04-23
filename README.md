@@ -73,8 +73,8 @@ Switch **Execution Mode** to `Live API` and keep the default API base URL `http:
 
 The active forward plan is now documented in:
 
-- [`docs/roadmap.md`](docs/roadmap.md) — 12-month roadmap for the execution wedge
-- [`docs/backlog.md`](docs/backlog.md) — prioritized execution backlog with dependencies and acceptance criteria
+- [`docs/roadmap.md`](docs/roadmap.md) — active post-wedge roadmap for real Sepolia execution, reviewer demo, deeper exceptions, and delegated signing
+- [`docs/backlog.md`](docs/backlog.md) — prioritized post-wedge backlog with `P0/P1/P2/P3` sequencing
 - [`docs/conformance.md`](docs/conformance.md) — current spec-to-server conformance matrix
 - [`docs/spec-hardening.md`](docs/spec-hardening.md) — implementation decisions for lifecycle, failure, webhook, and reporting semantics
 - [`docs/chain-adapter.md`](docs/chain-adapter.md) — current adapter contract and swap-in boundary for later testnet work
@@ -101,6 +101,13 @@ Still mocked or partial:
 - no delegated signing implementation
 - no testnet path yet
 - reviewer/demo package is now present, but still built around the current mock EVM wedge
+
+Current next defaults:
+
+- first real execution target: `Ethereum Sepolia`
+- first real asset: `USDC on Sepolia`
+- first real execution mode: `FULL_CUSTODY`
+- first real-chain demo audience: Tom-facing reviewer walkthrough
 
 Explicitly deferred:
 
@@ -185,9 +192,11 @@ The current roadmap is execution-first and narrow by design.
 
 Current priority order:
 
-1. decide whether the next real build step is deeper exception handling or testnet execution
-2. incorporate reviewer/demo feedback without widening the wedge prematurely
-3. keep broader family expansion deferred until the current stack earns it
+1. implement real `Sepolia + USDC` execution behind the existing adapter seam
+2. update the reviewer demo so one path includes real chain evidence
+3. deepen exception handling on top of real-chain outcomes
+4. add delegated signing on the same corridor
+5. keep broader expansion deferred until the Sepolia-backed wedge is proven
 
 The detailed program of record lives in [`docs/roadmap.md`](docs/roadmap.md) and [`docs/backlog.md`](docs/backlog.md).
 
@@ -195,7 +204,6 @@ The detailed program of record lives in [`docs/roadmap.md`](docs/roadmap.md) and
 
 These remain intentionally out of the current 12-month wedge:
 
-- delegated signing
 - non-EVM chains
 - tokenized assets
 - CBDC

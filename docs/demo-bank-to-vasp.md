@@ -2,6 +2,9 @@
 
 This is the reviewer-facing demo for the current `pacs.crypto` execution wedge.
 
+It is the current mock-backed reviewer script. The active roadmap now treats a
+real-chain `Sepolia + USDC` reviewer path as the next demo milestone.
+
 It is intentionally narrow:
 
 - one asset: `USDC`
@@ -166,5 +169,5 @@ Still intentionally out of scope:
 - delegated signing
 - non-EVM chains
 - testnet execution
-- exception-family APIs
+- deeper exception workflow beyond the first-slice investigation/return APIs
 - tokenized assets, CBDC, or DeFi expansion

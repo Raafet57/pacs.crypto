@@ -2,16 +2,22 @@
 
 ## Purpose
 
-This is the active 12-month roadmap for `pacs.crypto`.
+This is the active post-wedge roadmap for `pacs.crypto`.
 
-It assumes a narrow execution wedge:
+The first execution wedge is now complete enough that the next phase is no
+longer about proving the mock reference stack. It is about turning the same
+stack into a real-chain, reviewer-credible execution system without widening
+the API family prematurely.
 
-- one asset: USDC
-- one chain family: EVM
-- one corridor: bank -> sending VASP -> on-chain transfer -> receiving VASP
-- one custody model for the current program: full custody
+## Current Defaults
 
-The primary audience is standards-savvy reviewers who care about message-family discipline, implementation realism, and honest scoping.
+These defaults are locked for the next phase:
+
+- first real execution target: `Ethereum Sepolia`
+- first real asset: `USDC on Sepolia`
+- first real execution mode: `FULL_CUSTODY`
+- primary audience: `Tom-facing reviewer demo`
+- implementation seam: chain adapter internals first, route contracts later only if unavoidable
 
 ## Baseline As Of April 2026
 
@@ -19,7 +25,7 @@ The primary audience is standards-savvy reviewers who care about message-family 
 
 - root-level YAML specifications for Travel Rule and instruction submission
 - standalone HTML simulators with `Demo` and `Live API` modes
-- reference server with persisted Travel Rule, quote, instruction, status, finality, webhook, and reporting data
+- reference server with persisted Travel Rule, quote, instruction, status, finality, webhook, reporting, and first-slice exception data
 - pacs.002-like `execution-status` read surface
 - camt.025-like `finality-receipt` read surface
 - outbox-backed webhook registration and signed delivery attempts
@@ -33,12 +39,10 @@ The primary audience is standards-savvy reviewers who care about message-family 
 
 ### Still mocked or partial
 
-- chain lifecycle is still mocked, but now runs through an adapter-backed fee and finality policy with surfaced adapter metadata
-- webhook dispatch is background-driven with persisted retries, dead-letter handling, and operator stats, but still demo-grade rather than production-hardened
-- spec-covered conformance is hand-authored in code rather than generated directly from the YAML
-- delegated signing is intentionally unimplemented
-- no testnet execution path exists yet
-- reviewer demo package is now published under `docs/`
+- chain lifecycle still runs through a mock adapter rather than real chain execution
+- the current reviewer demo is still mock-backed even though the stack itself is executable
+- delegated signing remains intentionally unimplemented
+- broader exception workflow is still shallow compared with real operator remediation
 
 ### Explicitly deferred
 
@@ -46,158 +50,98 @@ The primary audience is standards-savvy reviewers who care about message-family 
 - tokenized assets
 - CBDC
 - regulated DeFi
-- agent-driven submission
+- agent-driven flows
 
 ## Roadmap
 
-### Phase 0 - Program of record and baseline snapshot
-Target window: Q2 2026
-
-Objective:
-Lock the repo around the actual execution wedge and make the current baseline legible.
-
-Deliverables:
-
-- roadmap and backlog docs under `docs/`
-- README links to the active roadmap and backlog
-- current-state summary of implemented, mocked, and deferred surfaces
-- initial architecture framing across specs, simulators, reference server, and docs
-
-Success criteria:
-
-- a new reviewer can understand the repo direction in under five minutes
-- the project no longer relies on scattered prose to explain what is real
-
-### Phase 1 - Conformance and spec hardening
+### Phase A - Real Sepolia execution
 Target window: Q2 to Q3 2026
 
 Objective:
-Move the reference server from “working prototype” to “spec-disciplined implementation.”
+Replace the mocked EVM lifecycle with real Sepolia execution while preserving
+the current public API family.
 
 Deliverables:
 
-- request validation tied more directly to the OpenAPI specs for implemented endpoints
-- response-shape checks for implemented endpoints
-- conformance matrix showing `implemented`, `partial`, and `not implemented`
-- documented hardening decisions for Travel Rule callback behavior, instruction failure semantics, webhook contract, and reporting-family boundaries
+- real `Sepolia USDC` adapter behind the existing chain-adapter seam
+- real transaction submission and tracking for the `FULL_CUSTODY` path
+- real tx hash, confirmation depth, and finality receipt population through the current read surfaces
+- mock adapter retained as a non-default fallback path for local demo/testing
 
 Success criteria:
 
-- runtime behavior and examples do not drift from the YAML
-- the repo can state exactly which spec surfaces are implemented in code
+- one instruction can progress from submit to real Sepolia tx hash without route redesign
+- `execution-status` and `finality-receipt` remain the canonical read models
+- reporting, webhooks, and exceptions keep using the same identifiers
 
-Current status:
-
-- done for the current wedge: spec-covered Travel Rule and instruction routes now have explicit request/query validation, tested response-shape coverage, a conformance matrix, and an explicit delegated-signing out-of-scope path
-
-### Phase 2 - Chain adapter and lifecycle realism
+### Phase B - Reviewer demo with real chain evidence
 Target window: Q3 2026
 
 Objective:
-Put the mocked lifecycle behind a clean chain-adapter boundary.
+Turn the reviewer package into a real-chain proof point rather than a strong
+mock narrative.
 
 Deliverables:
 
-- chain adapter interface around quote realism, broadcast, confirmation depth, and finality
-- current deterministic lifecycle refactored into a mock EVM adapter
-- fee-estimate model tied to the adapter boundary
-- richer finality metadata without changing the existing public read surfaces
+- one canonical bank-to-VASP walkthrough backed by a real Sepolia transaction
+- real-chain sample payload pack with tx hash, confirmations, and finality receipt
+- docs and simulator guidance that distinguish `mock demo` from `real-chain demo`
 
 Success criteria:
 
-- the mock flow still works end to end
-- the API layer can later move to testnet without route redesign
+- a reviewer can inspect one live scenario with real chain evidence in under ten minutes
+- the demo strengthens the standards story instead of turning into a generic crypto showcase
 
-Current status:
-
-- done for the current wedge: quote generation, fee estimates, slippage gating, confirmation thresholds, settlement defaults, lifecycle progression, lifecycle timestamps, and surfaced adapter metadata now run through the normalized mock EVM adapter boundary
-
-### Phase 3 - Webhook and event delivery maturity
+### Phase C - Exception handling deepening
 Target window: Q3 to Q4 2026
 
 Objective:
-Turn the existing outbox and delivery model into an operationally credible notification system.
+Make the current exception-family first slice strong enough for real operator
+follow-up on real-chain flows.
 
 Deliverables:
 
-- background dispatch instead of manual dispatch-only operation
-- persisted retry scheduling and attempt counters
-- exhausted-delivery handling
-- explicit delivery guarantees and limits in docs
+- richer `investigation_case` transitions and operator workflow
+- richer `return_case` remediation semantics across off-chain refund and compensating-transfer patterns
+- stronger linkage from exception records to real-chain evidence, finality, and reporting consequences
 
 Success criteria:
 
-- webhook behavior is credible enough for an institution-facing demo
-- push and poll remain aligned to the same canonical objects
+- real-chain operational follow-up can be tracked without mutating original `FINAL` payments
+- exception-family objects remain distinct from execution-status and finality reads
 
-Current status:
-
-- done for the current wedge: due deliveries can dispatch automatically in the background with persisted retry scheduling, dead-letter handling, operator stats, and documented delivery guarantees, while manual dispatch remains available for testing and operator forcing
-
-### Phase 4 - Reporting family completion
-Target window: Q4 2026
+### Phase D - Delegated signing
+Target window: Q4 2026 to Q1 2027
 
 Objective:
-Complete the first reporting family around the current instruction flow.
+Add the next real bank/VASP differentiator without widening the corridor.
 
 Deliverables:
 
-- tighter `camt.052` and `camt.053` semantics for balances, periods, and booked entries
-- simulator visibility for statements in live mode
-- clearer identifier traceability across instruction, status, finality, and reporting reads
+- delegated-signing support on the existing instruction family
+- unsigned transaction return plus signed transaction resubmission for the Sepolia wedge
+- conformance and demo coverage for the delegated path
 
 Success criteria:
 
-- a user can trace one payment from instruction submission to booked reporting outputs
-- reporting remains institution-facing rather than becoming a block-explorer surrogate
+- the same corridor supports both `FULL_CUSTODY` and delegated signing
+- delegated signing uses the existing family boundaries rather than a new execution model
 
-Current status:
-
-- done for the current wedge: reporting notifications, intraday summaries, and statements now carry direct instruction/UETR/transaction/travel-rule traceability, statement derivation metadata is explicit, and the live simulator surfaces statements alongside the existing status, finality, and notification views
-
-### Phase 5 - Demo package and reviewer kit
-Target window: Q1 2027
-
-Objective:
-Package the stack into a short, high-credibility demonstration.
-
-Deliverables:
-
-- one polished end-to-end scenario with sample payloads
-- sequence diagram and architecture note
-- short explanation of what changed from the original proposal once implementation began
-
-Success criteria:
-
-- a standards expert can understand the value in under ten minutes
-- the system reads as a coherent reference stack, not a UI mock
-
-Current status:
-
-- done for the current wedge: the repo now includes a reviewer walkthrough, sequence diagram, architecture note, and a canonical happy-path payload pack aligned to the running reference server
-
-### Phase 6 - Deferred expansion
+### Phase E - Broader expansion
 Target window: after Q1 2027
 
 Objective:
-Expand only after the narrow wedge is stable and credible.
+Expand only after the Sepolia-backed wedge is credible.
 
 Candidate areas:
 
-- delegated signing
-- exception family: returns, investigations, richer cancellation semantics
-- testnet execution
 - non-EVM chains
 - tokenized assets
 - CBDC
 - regulated DeFi
-- agent-driven submission
+- agent-driven flows
 
 Success criteria:
 
-- the current stack remains narrow and defensible
-- new family growth happens after the core system is mature
-
-Current status:
-
-- first-slice exception handling is now implemented for the current wedge: investigations and returns have persisted read/write surfaces, outbox/webhook events, and shared identifier traceability back to instruction, finality, and Travel Rule records; broader bilateral cancellation and deeper remediation semantics remain deferred
+- the current stack remains narrow and defensible until the real-chain wedge is proven
+- broader family growth does not displace the Sepolia execution program
