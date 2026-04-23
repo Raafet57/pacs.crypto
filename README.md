@@ -81,6 +81,7 @@ The active forward plan is now documented in:
 - [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
 - [`docs/architecture-note.md`](docs/architecture-note.md) — what changed architecturally once the proposal became executable
 - [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
+- [`docs/exception-family.md`](docs/exception-family.md) — decision-ready design for returns, investigations, and richer exception handling
 - [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
 
 ### Current Baseline
@@ -183,9 +184,9 @@ The current roadmap is execution-first and narrow by design.
 
 Current priority order:
 
-1. exception-family design
-2. testnet-readiness and reviewer-driven polish only where it sharpens the current wedge
-3. deferred expansion only after exception boundaries and demo feedback are incorporated
+1. decide whether the next real build step is first-slice exception handling or testnet execution
+2. incorporate reviewer/demo feedback without widening the wedge prematurely
+3. keep broader family expansion deferred until the current stack earns it
 
 The detailed program of record lives in [`docs/roadmap.md`](docs/roadmap.md) and [`docs/backlog.md`](docs/backlog.md).
 

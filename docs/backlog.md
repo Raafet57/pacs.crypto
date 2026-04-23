@@ -154,7 +154,7 @@ Acceptance criteria:
 
 ### Epic 8 - Exception-family design
 Priority: `P2`
-Status: `Planned`
+Status: `Done`
 Depends on: stable lifecycle and identifier semantics
 
 Work items:

@@ -194,3 +194,7 @@ Success criteria:
 
 - the current stack remains narrow and defensible
 - new family growth happens after the core system is mature
+
+Current status:
+
+- exception-family design is now decision-ready in `docs/exception-family.md`, while implementation remains deferred until the current wedge needs it
