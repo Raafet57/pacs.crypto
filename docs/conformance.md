@@ -25,6 +25,13 @@ Status meanings:
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
 | `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
 | `GET /instruction/search` | `instruction-api-v1.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
+| `POST /report/query` | `camt-crypto-reporting-v1.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance, intraday, statement, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Async statement delivery and raw camt.054 callback posting remain out of scope. |
+| `GET /report/intraday` | `camt-crypto-reporting-v1.yaml` | query params | `IntradayReport` | Partial | Spec path and query validation are present. The response currently returns the reference-server intraday view rather than the full camt.052 wrapper from the root YAML. |
+| `GET /report/statement` | `camt-crypto-reporting-v1.yaml` | query params | `WalletStatement` | Partial | Spec path and wallet/chain lookup are present. The response uses the current persisted statement record shape rather than the full root-spec wrapper. |
+| `GET /report/notification/{notificationId}` | `camt-crypto-reporting-v1.yaml` | n/a | `BlockchainNotification` | Partial | Spec lookup path is present on top of the current reporting notification record shape. |
+| `POST /report/notification/callback` | `camt-crypto-reporting-v1.yaml` | `BlockchainNotification` | acknowledgement | Out of scope | This is explicitly a bank-side endpoint. The reference server is the VASP side and returns `501` to make that boundary explicit. |
+| `GET /report/search` | `camt-crypto-reporting-v1.yaml` | query params | `EntrySearchResponse` | Implemented | Wallet-scoped entry search, pagination, amount/finality filters, and spec-style entry summaries are present. |
+| `GET /report/stats` | `camt-crypto-reporting-v1.yaml` | query params | `ReportStatsResponse` | Implemented | Wallet-scoped token totals and grouped breakdowns are present for the current local dataset. |
 
 ## Reference-server extensions
 
@@ -49,6 +56,10 @@ These routes are real, but they are outside the current root YAML specs and ther
 - `GET /reporting/statements`
 - `GET /reporting/statements/:statementId`
 
+The `/reporting/*` routes above remain as compatibility aliases for the earlier
+reference-server surface. New conformance work is targeting the root
+`/report/*` path family from `camt-crypto-reporting-v1.yaml`.
+
 ## Current conformance focus
 
 The current conformance work is intentionally limited to the bank-to-VASP wedge already implemented in code:
@@ -56,7 +67,13 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
 - stricter request validation for the spec-covered write routes
 - stricter query validation for the spec-covered search and stats routes
 - response-shape coverage for the core spec-covered read and search routes
+- reporting path-family alignment against `camt-crypto-reporting-v1.yaml`
+- wallet-scoped notification subscription support on top of the webhook subsystem
 - explicit documentation of the current out-of-scope spec surface:
   - delegated signing
+  - bank-side reporting callback endpoint
 
-Delegated signing, non-EVM flows, and richer exception families remain outside the current conformance target. The current conformance layer is hand-authored in code for the implemented wedge rather than generated directly from the YAML.
+Delegated signing, non-EVM flows, richer exception families, and full camt.052 /
+camt.053 / camt.054 wire-shape parity remain outside the current conformance
+target. The current conformance layer is hand-authored in code for the
+implemented wedge rather than generated directly from the YAML.

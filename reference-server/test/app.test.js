@@ -226,6 +226,21 @@ function assertTravelRuleStatsResponseShape(response) {
   assert.ok(Array.isArray(response.totals.volumes));
 }
 
+function assertReportEntrySearchResponseShape(response) {
+  assert.equal(typeof response.total_matched, 'number');
+  assert.equal(typeof response.page_size, 'number');
+  assertIsoDateTime(response.generated_at);
+  assert.ok(Array.isArray(response.entries));
+}
+
+function assertReportStatsResponseShape(response) {
+  assertIsoDateTime(response.generated_at);
+  assert.equal(typeof response.wallet_address, 'string');
+  assert.equal(typeof response.chain_dli, 'string');
+  assert.ok(response.period);
+  assert.ok(Array.isArray(response.totals));
+}
+
 function assertQuoteResponseShape(response) {
   assertUuid(response.quote_id);
   assertIsoDateTime(response.valid_until);
@@ -2161,6 +2176,309 @@ test('reporting records expose traceability links back to instruction and travel
     statementDetailResponse.json().statement_scope.source_notification_ids.length,
     1,
   );
+
+  await app.close();
+});
+
+test('report spec search validates required wallet and chain filters', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/report/search?chain_dli=bad&from_date_time=not-a-date&page_size=999',
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'INVALID_REQUEST');
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'wallet_address'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'chain_dli'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'from_date_time'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'page_size'),
+    true,
+  );
+
+  await app.close();
+});
+
+test('report spec paths expose search stats intraday statement and notification detail', async () => {
+  const app = await buildApp();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-REPORT-SPEC-001',
+      },
+      debtor: {
+        name: 'Acme Trading GmbH',
+        lei: '529900T8BM49AURSDO55',
+      },
+      debtor_account: {
+        proxy: { identification: '0xreportspecdebit' },
+      },
+      creditor: {
+        name: 'Bravo Supplies B.V.',
+        lei: '724500QHKL6MVSQQ1Z17',
+      },
+      creditor_account: {
+        proxy: { identification: '0xreportspeccredit' },
+      },
+      interbank_settlement_amount: {
+        amount: '8800.00',
+        currency: 'USD',
+      },
+      blockchain_instruction: {
+        token: {
+          token_symbol: 'USDC',
+          token_dti: '4H95J0R2X',
+        },
+        chain_dli: 'X9J9XDMTD',
+        custody_model: 'FULL_CUSTODY',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FINAL');
+
+  const searchResponse = await app.inject({
+    method: 'GET',
+    url: `/report/search?wallet_address=0xreportspecdebit&chain_dli=X9J9XDMTD&instruction_id=${instruction.instruction_id}&credit_debit_indicator=DBIT`,
+  });
+
+  assert.equal(searchResponse.statusCode, 200);
+  assertReportEntrySearchResponseShape(searchResponse.json());
+  assert.equal(searchResponse.json().total_matched, 1);
+  assert.equal(searchResponse.json().entries[0].credit_debit_indicator, 'DBIT');
+  assert.equal(searchResponse.json().entries[0].instruction_id, instruction.instruction_id);
+
+  const statsResponse = await app.inject({
+    method: 'GET',
+    url: '/report/stats?wallet_address=0xreportspecdebit&chain_dli=X9J9XDMTD&from_date_time=2025-01-01T00:00:00Z&to_date_time=2030-01-01T00:00:00Z&group_by=credit_debit',
+  });
+
+  assert.equal(statsResponse.statusCode, 200);
+  assertReportStatsResponseShape(statsResponse.json());
+  assert.equal(statsResponse.json().totals.length, 1);
+  assert.equal(statsResponse.json().totals[0].total_entries, 1);
+  assert.equal(statsResponse.json().breakdown[0].dimension_value, 'DBIT');
+
+  const intradayResponse = await app.inject({
+    method: 'GET',
+    url: '/report/intraday?wallet_address=0xreportspecdebit&chain_dli=X9J9XDMTD',
+  });
+
+  assert.equal(intradayResponse.statusCode, 200);
+  assert.equal(intradayResponse.json().movement_summary.notification_count, 1);
+  assert.equal(intradayResponse.json().account_views.length, 1);
+
+  const statementResponse = await app.inject({
+    method: 'GET',
+    url: `/report/statement?wallet_address=0xreportspecdebit&chain_dli=X9J9XDMTD&from_date=${agedTimestamp.slice(0, 10)}&to_date=${agedTimestamp.slice(0, 10)}`,
+  });
+
+  assert.equal(statementResponse.statusCode, 200);
+  assert.equal(statementResponse.json().account_role, 'DEBTOR');
+  assert.equal(statementResponse.json().movement_summary.entry_count, 1);
+
+  const legacyNotificationsResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/notifications?instruction_id=${instruction.instruction_id}&wallet_address=0xreportspecdebit`,
+  });
+  const notificationId = legacyNotificationsResponse.json().notifications[0].notification_id;
+
+  const notificationDetailResponse = await app.inject({
+    method: 'GET',
+    url: `/report/notification/${notificationId}`,
+  });
+
+  assert.equal(notificationDetailResponse.statusCode, 200);
+  assert.equal(notificationDetailResponse.json().instruction_id, instruction.instruction_id);
+  assert.equal(notificationDetailResponse.json().party.wallet_address, '0xreportspecdebit');
+
+  const queryBalanceResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-BAL-001',
+      query_type: 'BALANCE',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportspecdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+    },
+  });
+
+  assert.equal(queryBalanceResponse.statusCode, 201);
+  assert.equal(queryBalanceResponse.json().query_type, 'BALANCE');
+  assert.ok(Array.isArray(queryBalanceResponse.json().balances));
+  assert.equal(queryBalanceResponse.json().balances.length, 1);
+
+  await app.close();
+});
+
+test('report query notification subscriptions are wallet-scoped and can be cancelled', async () => {
+  const app = await buildApp();
+
+  const subscribeResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-SUB-001',
+      query_type: 'NOTIFICATION_SUBSCRIBE',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportsubdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      callback_url: 'https://bank.example.com/webhooks/blockchain-notifications',
+    },
+  });
+
+  assert.equal(subscribeResponse.statusCode, 201);
+  assert.equal(subscribeResponse.json().subscription_status, 'ACTIVE');
+  const subscriptionId = subscribeResponse.json().subscription_id;
+
+  const duplicateSubscribeResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-SUB-002',
+      query_type: 'NOTIFICATION_SUBSCRIBE',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportsubdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      callback_url: 'https://bank.example.com/webhooks/blockchain-notifications',
+    },
+  });
+
+  assert.equal(duplicateSubscribeResponse.statusCode, 409);
+  assert.equal(duplicateSubscribeResponse.json().subscription_id, subscriptionId);
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-REPORT-SUB-001',
+      },
+      debtor_account: {
+        proxy: { identification: '0xreportsubdebit' },
+      },
+      creditor_account: {
+        proxy: { identification: '0xreportsubcredit' },
+      },
+      interbank_settlement_amount: {
+        amount: '9100.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FINAL');
+
+  const deliveriesResponse = await app.inject({
+    method: 'GET',
+    url: `/webhook-endpoints/${subscriptionId}/deliveries?event_type=reporting_notification.created`,
+  });
+
+  assert.equal(deliveriesResponse.statusCode, 200);
+  assert.equal(deliveriesResponse.json().total_matched, 1);
+  assert.equal(
+    deliveriesResponse.json().deliveries[0].event_type,
+    'reporting_notification.created',
+  );
+
+  const unsubscribeResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-UNSUB-001',
+      query_type: 'NOTIFICATION_UNSUBSCRIBE',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportsubdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      subscription_id: subscriptionId,
+    },
+  });
+
+  assert.equal(unsubscribeResponse.statusCode, 201);
+  assert.equal(unsubscribeResponse.json().subscription_status, 'CANCELLED');
+
+  const subscriptionLookupResponse = await app.inject({
+    method: 'GET',
+    url: `/webhook-endpoints/${subscriptionId}`,
+  });
+
+  assert.equal(subscriptionLookupResponse.statusCode, 200);
+  assert.equal(subscriptionLookupResponse.json().active, false);
 
   await app.close();
 });

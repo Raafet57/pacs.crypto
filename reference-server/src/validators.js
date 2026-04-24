@@ -115,6 +115,40 @@ const INSTRUCTION_STATUSES = new Set([
   'RAMP_FAILED',
 ]);
 
+const REPORT_QUERY_TYPES = new Set([
+  'BALANCE',
+  'INTRADAY',
+  'STATEMENT',
+  'NOTIFICATION_SUBSCRIBE',
+  'NOTIFICATION_UNSUBSCRIBE',
+]);
+
+const REPORT_ENTRY_STATUSES = new Set([
+  'BOOK',
+  'PDNG',
+]);
+
+const REPORT_CREDIT_DEBIT_INDICATORS = new Set([
+  'CRDT',
+  'DBIT',
+]);
+
+const REPORT_SEARCH_SORTS = new Set([
+  'booking_date_asc',
+  'booking_date_desc',
+  'amount_asc',
+  'amount_desc',
+]);
+
+const REPORT_STATS_GROUP_BY = new Set([
+  'entry_status',
+  'finality_status',
+  'credit_debit',
+  'token',
+  'day',
+  'counterparty_wallet',
+]);
+
 const INVESTIGATION_CASE_TYPES = new Set([
   'STATUS_QUERY',
   'BENEFICIARY_CREDIT_QUERY',
@@ -264,6 +298,25 @@ function validateDateTimeField(errors, value, field, required = false) {
 
   if (!isIsoDateTime(value)) {
     pushError(errors, field, `${field} must be an ISO 8601 date-time string.`);
+  }
+}
+
+function validateDateField(errors, value, field, required = false) {
+  if (value === undefined || value === null || value === '') {
+    if (required) {
+      pushError(errors, field, `${field} is required.`);
+    }
+    return;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    pushError(errors, field, `${field} must be an ISO 8601 date string.`);
+    return;
+  }
+
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed)) {
+    pushError(errors, field, `${field} must be an ISO 8601 date string.`);
   }
 }
 
@@ -572,6 +625,71 @@ function validateRejectionReasons(errors, reasons, field) {
       `${baseField}.code`,
     );
   });
+}
+
+function validateUriField(errors, value, field, { required = false } = {}) {
+  if (value === undefined || value === null || value === '') {
+    if (required) {
+      pushError(errors, field, `${field} is required.`);
+    }
+    return;
+  }
+
+  if (!hasText(value)) {
+    pushError(errors, field, `${field} must be a non-empty URI string.`);
+    return;
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      pushError(errors, field, `${field} must be an http or https URI.`);
+    }
+  } catch {
+    pushError(errors, field, `${field} must be a valid URI.`);
+  }
+}
+
+function extractChainDliFromAccount(account) {
+  const proprietary = account?.type?.proprietary;
+  if (!hasText(proprietary)) {
+    return null;
+  }
+
+  const normalized = proprietary.trim();
+  return normalized.startsWith('DLID/') ? normalized.slice(5) : normalized;
+}
+
+function validateReportAccount(errors, value, field) {
+  validateRequiredField(
+    errors,
+    isObject(value),
+    field,
+    `${field} is required and must be an object.`,
+  );
+  if (!isObject(value)) {
+    return;
+  }
+
+  validateTextField(
+    errors,
+    value.identification?.proxy?.identification,
+    `${field}.identification.proxy.identification`,
+    `${field}.identification.proxy.identification is required.`,
+  );
+  validateTextField(
+    errors,
+    value.type?.proprietary,
+    `${field}.type.proprietary`,
+    `${field}.type.proprietary is required.`,
+  );
+  validatePatternField(
+    errors,
+    extractChainDliFromAccount(value),
+    CHAIN_DLI_PATTERN,
+    `${field}.type.proprietary`,
+    `${field}.type.proprietary must contain a valid DLID/<dli> or bare DLI value.`,
+  );
 }
 
 export function formatValidationErrors(errors) {
@@ -1002,6 +1120,270 @@ export function validateInstructionSearchQuery(query) {
   );
   validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 500 });
   validateCursorField(errors, query.cursor, 'cursor');
+  return errors;
+}
+
+export function validateReportQuery(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateTextField(
+    errors,
+    body.query_identification,
+    'query_identification',
+    'query_identification is required.',
+  );
+  validateTextField(errors, body.query_type, 'query_type', 'query_type is required.');
+  validateEnumField(errors, body.query_type, REPORT_QUERY_TYPES, 'query_type', 'query_type');
+  validateReportAccount(errors, body.account, 'account');
+
+  if (body.token_filter !== undefined) {
+    if (!Array.isArray(body.token_filter) || body.token_filter.length === 0) {
+      pushError(
+        errors,
+        'token_filter',
+        'token_filter must be a non-empty array when provided.',
+      );
+    } else {
+      body.token_filter.forEach((token, index) => {
+        validateTokenIdentification(errors, token, `token_filter[${index}]`);
+      });
+    }
+  }
+
+  if (body.reporting_period !== undefined) {
+    validateRequiredField(
+      errors,
+      isObject(body.reporting_period),
+      'reporting_period',
+      'reporting_period must be an object.',
+    );
+    if (isObject(body.reporting_period)) {
+      validateDateTimeField(
+        errors,
+        body.reporting_period.from_date_time,
+        'reporting_period.from_date_time',
+      );
+      validateDateTimeField(
+        errors,
+        body.reporting_period.to_date_time,
+        'reporting_period.to_date_time',
+      );
+      validateDateRange(
+        errors,
+        body.reporting_period.from_date_time,
+        body.reporting_period.to_date_time,
+        'reporting_period.from_date_time',
+        'reporting_period.to_date_time',
+      );
+    }
+  }
+
+  if (body.entry_status_filter !== undefined) {
+    if (!Array.isArray(body.entry_status_filter) || body.entry_status_filter.length === 0) {
+      pushError(
+        errors,
+        'entry_status_filter',
+        'entry_status_filter must be a non-empty array when provided.',
+      );
+    } else {
+      body.entry_status_filter.forEach((status) => {
+        if (!REPORT_ENTRY_STATUSES.has(status)) {
+          pushError(
+            errors,
+            'entry_status_filter',
+            `entry_status_filter must contain only: ${Array.from(REPORT_ENTRY_STATUSES).join(', ')}.`,
+          );
+        }
+      });
+    }
+  }
+
+  validateUriField(errors, body.callback_url, 'callback_url');
+  validateUuidField(errors, body.subscription_id, 'subscription_id');
+
+  if (body.query_type === 'NOTIFICATION_SUBSCRIBE') {
+    validateUriField(errors, body.callback_url, 'callback_url', { required: true });
+  }
+
+  if (body.query_type === 'NOTIFICATION_UNSUBSCRIBE') {
+    if (!body.subscription_id) {
+      pushError(
+        errors,
+        'subscription_id',
+        'subscription_id is required for NOTIFICATION_UNSUBSCRIBE.',
+      );
+    }
+  }
+
+  return errors;
+}
+
+export function validateReportIntradayQuery(query) {
+  const errors = [];
+  validateTextField(errors, query.wallet_address, 'wallet_address', 'wallet_address is required.');
+  validateTextField(errors, query.chain_dli, 'chain_dli', 'chain_dli is required.');
+  validatePatternField(
+    errors,
+    query.chain_dli,
+    CHAIN_DLI_PATTERN,
+    'chain_dli',
+    'chain_dli must be a 9-character uppercase DLI value.',
+  );
+  validateDateTimeField(errors, query.from_date_time, 'from_date_time');
+  validateDateTimeField(errors, query.to_date_time, 'to_date_time');
+  validateDateRange(errors, query.from_date_time, query.to_date_time, 'from_date_time', 'to_date_time');
+  validatePatternField(
+    errors,
+    query.token_dti,
+    TOKEN_DTI_PATTERN,
+    'token_dti',
+    'token_dti must be a 9-character uppercase DTI value.',
+  );
+  validateEnumListField(
+    errors,
+    query.entry_status,
+    REPORT_ENTRY_STATUSES,
+    'entry_status',
+    'entry_status',
+  );
+  validateEnumField(
+    errors,
+    query.credit_debit_indicator,
+    REPORT_CREDIT_DEBIT_INDICATORS,
+    'credit_debit_indicator',
+    'credit_debit_indicator',
+  );
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
+  validateCursorField(errors, query.after, 'after');
+  validateEnumField(errors, query.sort, REPORT_SEARCH_SORTS, 'sort', 'sort');
+  return errors;
+}
+
+export function validateReportStatementQuery(query) {
+  const errors = [];
+  validateTextField(errors, query.wallet_address, 'wallet_address', 'wallet_address is required.');
+  validateTextField(errors, query.chain_dli, 'chain_dli', 'chain_dli is required.');
+  validatePatternField(
+    errors,
+    query.chain_dli,
+    CHAIN_DLI_PATTERN,
+    'chain_dli',
+    'chain_dli must be a 9-character uppercase DLI value.',
+  );
+  validateDateField(errors, query.from_date, 'from_date', true);
+  validateDateField(errors, query.to_date, 'to_date', true);
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(String(query.from_date ?? '')) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(String(query.to_date ?? ''))
+  ) {
+    if (Date.parse(`${query.from_date}T00:00:00Z`) > Date.parse(`${query.to_date}T00:00:00Z`)) {
+      pushError(errors, 'from_date', 'from_date must be earlier than or equal to to_date.');
+    }
+  }
+  validatePatternField(
+    errors,
+    query.token_dti,
+    TOKEN_DTI_PATTERN,
+    'token_dti',
+    'token_dti must be a 9-character uppercase DTI value.',
+  );
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
+  validateCursorField(errors, query.after, 'after');
+  validateEnumField(errors, query.sort, REPORT_SEARCH_SORTS, 'sort', 'sort');
+  return errors;
+}
+
+export function validateReportSearchQuery(query) {
+  const errors = [];
+  validateTextField(errors, query.wallet_address, 'wallet_address', 'wallet_address is required.');
+  validateTextField(errors, query.chain_dli, 'chain_dli', 'chain_dli is required.');
+  validatePatternField(
+    errors,
+    query.chain_dli,
+    CHAIN_DLI_PATTERN,
+    'chain_dli',
+    'chain_dli must be a 9-character uppercase DLI value.',
+  );
+  validateDateTimeField(errors, query.from_date_time, 'from_date_time');
+  validateDateTimeField(errors, query.to_date_time, 'to_date_time');
+  validateDateRange(errors, query.from_date_time, query.to_date_time, 'from_date_time', 'to_date_time');
+  validatePatternField(
+    errors,
+    query.token_dti,
+    TOKEN_DTI_PATTERN,
+    'token_dti',
+    'token_dti must be a 9-character uppercase DTI value.',
+  );
+  validateEnumListField(
+    errors,
+    query.entry_status,
+    REPORT_ENTRY_STATUSES,
+    'entry_status',
+    'entry_status',
+  );
+  validateEnumField(
+    errors,
+    query.finality_status,
+    new Set(['PENDING', 'PROBABILISTIC', 'FINAL']),
+    'finality_status',
+    'finality_status',
+  );
+  validateEnumField(
+    errors,
+    query.credit_debit_indicator,
+    REPORT_CREDIT_DEBIT_INDICATORS,
+    'credit_debit_indicator',
+    'credit_debit_indicator',
+  );
+  validateDecimalField(errors, query.amount_min, 'amount_min');
+  validateDecimalField(errors, query.amount_max, 'amount_max');
+  validateUuidField(errors, query.instruction_id, 'instruction_id');
+  validateUuidField(errors, query.travel_rule_record_id, 'travel_rule_record_id');
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
+  validateCursorField(errors, query.after, 'after');
+  validateEnumField(errors, query.sort, REPORT_SEARCH_SORTS, 'sort', 'sort');
+  return errors;
+}
+
+export function validateReportStatsQuery(query) {
+  const errors = [];
+  validateTextField(errors, query.wallet_address, 'wallet_address', 'wallet_address is required.');
+  validateTextField(errors, query.chain_dli, 'chain_dli', 'chain_dli is required.');
+  validatePatternField(
+    errors,
+    query.chain_dli,
+    CHAIN_DLI_PATTERN,
+    'chain_dli',
+    'chain_dli must be a 9-character uppercase DLI value.',
+  );
+  validateDateTimeField(errors, query.from_date_time, 'from_date_time', true);
+  validateDateTimeField(errors, query.to_date_time, 'to_date_time', true);
+  validateDateRange(errors, query.from_date_time, query.to_date_time, 'from_date_time', 'to_date_time');
+  validatePatternField(
+    errors,
+    query.token_dti,
+    TOKEN_DTI_PATTERN,
+    'token_dti',
+    'token_dti must be a 9-character uppercase DTI value.',
+  );
+  validateEnumListField(
+    errors,
+    query.entry_status,
+    REPORT_ENTRY_STATUSES,
+    'entry_status',
+    'entry_status',
+  );
+  validateEnumField(
+    errors,
+    query.group_by,
+    REPORT_STATS_GROUP_BY,
+    'group_by',
+    'group_by',
+  );
   return errors;
 }
 

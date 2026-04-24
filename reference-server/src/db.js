@@ -670,6 +670,67 @@ function getDebitNotificationTriggerStatus(debitTiming) {
   return 'BROADCAST';
 }
 
+function toReportEntryStatus(bookingStatus) {
+  return bookingStatus === 'BOOKED' ? 'BOOK' : 'PDNG';
+}
+
+function toReportCreditDebitIndicator(entryType) {
+  return entryType === 'DEBIT' ? 'DBIT' : 'CRDT';
+}
+
+function compareReportingRecords(left, right, sort = 'booking_date_desc') {
+  const leftAmount = Number.parseFloat(left.settlement_amount?.amount ?? '0');
+  const rightAmount = Number.parseFloat(right.settlement_amount?.amount ?? '0');
+  const leftBooking = Date.parse(left.booking_date_time ?? left.created_at ?? nowIso());
+  const rightBooking = Date.parse(right.booking_date_time ?? right.created_at ?? nowIso());
+
+  switch (sort) {
+    case 'booking_date_asc':
+      return leftBooking - rightBooking;
+    case 'amount_asc':
+      return leftAmount - rightAmount || rightBooking - leftBooking;
+    case 'amount_desc':
+      return rightAmount - leftAmount || rightBooking - leftBooking;
+    case 'booking_date_desc':
+    default:
+      return rightBooking - leftBooking;
+  }
+}
+
+function sortReportingNotificationRecords(records, sort) {
+  return [...records].sort((left, right) => compareReportingRecords(left, right, sort));
+}
+
+function buildReportBalanceSnapshots(records) {
+  const totals = new Map();
+  for (const record of records) {
+    const key = serialize({
+      currency: record.settlement_amount?.currency ?? 'XXX',
+      token_dti: record.token?.token_dti ?? null,
+      token_symbol: record.token?.token_symbol ?? null,
+    });
+    const existing = totals.get(key) ?? {
+      token: record.token ?? {},
+      currency: record.settlement_amount?.currency ?? 'XXX',
+      netAmount: 0,
+    };
+    const amount = Number.parseFloat(record.settlement_amount?.amount ?? '0');
+    existing.netAmount += record.entry_type === 'DEBIT' ? -amount : amount;
+    totals.set(key, existing);
+  }
+
+  return Array.from(totals.values()).map((entry) => ({
+    balance_type: 'ITBD',
+    token: entry.token,
+    token_amount: {
+      amount: formatDecimalAmount(entry.netAmount),
+      currency: entry.currency,
+    },
+    credit_debit_indicator: entry.netAmount < 0 ? 'DBIT' : 'CRDT',
+    date_time: nowIso(),
+  }));
+}
+
 function buildReportingNotificationRecord(record, notificationKind, chainAdapter) {
   const isDebit = notificationKind === 'DEBTOR_DEBIT';
   const accountRole = isDebit ? 'DEBTOR' : 'CREDITOR';
@@ -848,6 +909,72 @@ function buildReportingNotificationSummary(record) {
         notificationId: record.notification_id,
       }),
   };
+}
+
+function buildReportEntrySummary(record) {
+  return {
+    entry_reference: record.notification_id,
+    credit_debit_indicator: toReportCreditDebitIndicator(record.entry_type),
+    entry_status: toReportEntryStatus(record.booking_status),
+    booking_date: record.booking_date_time,
+    token_dti: record.token?.token_dti ?? null,
+    token_symbol: record.token?.token_symbol ?? null,
+    token_amount: record.settlement_amount?.amount ?? null,
+    finality_status: record.status_reference?.current_instruction_status === 'FINAL'
+      ? 'FINAL'
+      : record.status_reference?.trigger_status === 'BROADCAST'
+        ? 'PENDING'
+        : record.status_reference?.trigger_status === 'CONFIRMING'
+          ? 'PROBABILISTIC'
+          : (record.traceability?.transaction_hash ? 'PROBABILISTIC' : 'PENDING'),
+    transaction_hash: record.transaction_hash ?? null,
+    instruction_id: record.instruction_id,
+    travel_rule_record_id: record.travel_rule_record_id ?? null,
+  };
+}
+
+function buildReportTokenStats(records) {
+  const aggregates = new Map();
+  for (const record of records) {
+    const key = serialize({
+      token_dti: record.token?.token_dti ?? null,
+      token_symbol: record.token?.token_symbol ?? null,
+    });
+    const existing = aggregates.get(key) ?? {
+      token_dti: record.token?.token_dti ?? null,
+      token_symbol: record.token?.token_symbol ?? null,
+      total_entries: 0,
+      total_credit_entries: 0,
+      total_debit_entries: 0,
+      total_credit_amount: 0,
+      total_debit_amount: 0,
+    };
+    const amount = Number.parseFloat(record.settlement_amount?.amount ?? '0');
+    existing.total_entries += 1;
+    if (record.entry_type === 'DEBIT') {
+      existing.total_debit_entries += 1;
+      existing.total_debit_amount += amount;
+    } else {
+      existing.total_credit_entries += 1;
+      existing.total_credit_amount += amount;
+    }
+    aggregates.set(key, existing);
+  }
+
+  return Array.from(aggregates.values()).map((entry) => {
+    const netAmount = entry.total_credit_amount - entry.total_debit_amount;
+    return {
+      ...(entry.token_dti ? { token_dti: entry.token_dti } : {}),
+      ...(entry.token_symbol ? { token_symbol: entry.token_symbol } : {}),
+      total_entries: entry.total_entries,
+      total_credit_entries: entry.total_credit_entries,
+      total_debit_entries: entry.total_debit_entries,
+      total_credit_amount: formatDecimalAmount(entry.total_credit_amount),
+      total_debit_amount: formatDecimalAmount(entry.total_debit_amount),
+      net_amount: formatDecimalAmount(netAmount),
+      net_credit_debit_indicator: netAmount < 0 ? 'DBIT' : 'CRDT',
+    };
+  });
 }
 
 function buildStatementPeriod(notifications) {
@@ -1391,6 +1518,10 @@ function buildWebhookSubscriptionRecord(submission) {
       ? submission.max_attempts
       : 5,
     last_delivery_at: null,
+    filter_wallet_address: submission.filter_wallet_address ?? null,
+    filter_chain_dli: submission.filter_chain_dli ?? null,
+    subscription_kind: submission.subscription_kind ?? 'GENERIC',
+    query_identification: submission.query_identification ?? null,
   };
 }
 
@@ -1434,6 +1565,32 @@ function buildWebhookDeliveryRecord(event, subscription) {
     created_at: event.created_at,
     updated_at: event.created_at,
   };
+}
+
+function doesWebhookSubscriptionMatchEvent(subscription, event) {
+  if (!subscription.active) {
+    return false;
+  }
+
+  if (!subscription.subscribed_event_types.includes(event.event_type)) {
+    return false;
+  }
+
+  if (event.event_type === 'reporting_notification.created') {
+    const walletFilter = subscription.filter_wallet_address;
+    const chainFilter = subscription.filter_chain_dli;
+    const eventWallet = event.payload?.party?.wallet_address ?? null;
+    const eventChain = event.payload?.chain_dli ?? null;
+
+    if (walletFilter && eventWallet !== walletFilter) {
+      return false;
+    }
+    if (chainFilter && eventChain !== chainFilter) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function buildWebhookEnvelope(event, delivery) {
@@ -2816,11 +2973,90 @@ export class ReferenceStore {
     };
   }
 
-  createWebhookDeliveriesForEvent(event) {
-    const subscriptions = this.listWebhookSubscriptionRecords().filter(
+  findReportNotificationSubscription({
+    url,
+    walletAddress,
+    chainDli,
+  }) {
+    return this.listWebhookSubscriptionRecords().find(
       (subscription) =>
         subscription.active &&
-        subscription.subscribed_event_types.includes(event.event_type),
+        subscription.subscription_kind === 'REPORT_NOTIFICATION' &&
+        subscription.url === url &&
+        subscription.filter_wallet_address === walletAddress &&
+        subscription.filter_chain_dli === chainDli,
+    ) ?? null;
+  }
+
+  cancelWebhookSubscription(subscriptionId) {
+    const current = this.getWebhookSubscriptionRecord(subscriptionId);
+    if (!current) {
+      return null;
+    }
+
+    const updated = {
+      ...current,
+      active: false,
+      updated_at: nowIso(),
+    };
+    this.updateWebhookSubscriptionStmt.run(
+      updated.url,
+      updated.active ? 1 : 0,
+      updated.updated_at,
+      serialize(updated),
+      updated.subscription_id,
+    );
+
+    return buildWebhookSubscriptionResponse(updated);
+  }
+
+  createReportNotificationSubscription({
+    callbackUrl,
+    walletAddress,
+    chainDli,
+    queryIdentification = null,
+  }) {
+    const existing = this.findReportNotificationSubscription({
+      url: callbackUrl,
+      walletAddress,
+      chainDli,
+    });
+    if (existing) {
+      return {
+        duplicate: true,
+        subscription: buildWebhookSubscriptionResponse(existing),
+      };
+    }
+
+    const subscription = this.createWebhookSubscription({
+      url: callbackUrl,
+      signing_secret: randomUUID().replaceAll('-', ''),
+      subscribed_event_types: ['reporting_notification.created'],
+      description: `Spec 3 notification subscription for ${walletAddress} on ${chainDli}`,
+      filter_wallet_address: walletAddress,
+      filter_chain_dli: chainDli,
+      subscription_kind: 'REPORT_NOTIFICATION',
+      query_identification: queryIdentification,
+    });
+
+    return {
+      duplicate: false,
+      subscription,
+    };
+  }
+
+  cancelReportNotificationSubscription(subscriptionId) {
+    const subscription = this.getWebhookSubscriptionRecord(subscriptionId);
+    if (!subscription || subscription.subscription_kind !== 'REPORT_NOTIFICATION') {
+      return null;
+    }
+
+    return this.cancelWebhookSubscription(subscriptionId);
+  }
+
+  createWebhookDeliveriesForEvent(event) {
+    const subscriptions = this.listWebhookSubscriptionRecords().filter(
+      (subscription) => doesWebhookSubscriptionMatchEvent(subscription, event),
     );
 
     const deliveries = [];
@@ -3309,6 +3545,7 @@ export class ReferenceStore {
   filterReportingNotificationRecords(filters = {}) {
     const entryTypes = parseListFilter(filters.entry_type);
     const accountRoles = parseListFilter(filters.account_role);
+    const entryStatuses = parseListFilter(filters.entry_status);
     return this.listReportingNotificationRecords().filter((record) => {
       if (filters.instruction_id && record.instruction_id !== filters.instruction_id) {
         return false;
@@ -3320,6 +3557,12 @@ export class ReferenceStore {
         return false;
       }
       if (accountRoles.length && !accountRoles.includes(record.account_role)) {
+        return false;
+      }
+      if (
+        entryStatuses.length &&
+        !entryStatuses.includes(toReportEntryStatus(record.booking_status))
+      ) {
         return false;
       }
       if (filters.chain_dli && record.chain_dli !== filters.chain_dli) {
@@ -3336,6 +3579,42 @@ export class ReferenceStore {
         record.party?.wallet_address !== filters.wallet_address
       ) {
         return false;
+      }
+      if (
+        filters.counterparty_wallet &&
+        record.counterparty?.wallet_address !== filters.counterparty_wallet
+      ) {
+        return false;
+      }
+      if (
+        filters.transaction_hash &&
+        record.transaction_hash !== filters.transaction_hash
+      ) {
+        return false;
+      }
+      if (
+        filters.travel_rule_record_id &&
+        record.travel_rule_record_id !== filters.travel_rule_record_id
+      ) {
+        return false;
+      }
+      if (filters.finality_status) {
+        const finalityStatus = buildReportEntrySummary(record).finality_status;
+        if (finalityStatus !== filters.finality_status) {
+          return false;
+        }
+      }
+      if (filters.amount_min) {
+        const amount = Number.parseFloat(record.settlement_amount?.amount ?? '0');
+        if (amount < Number.parseFloat(filters.amount_min)) {
+          return false;
+        }
+      }
+      if (filters.amount_max) {
+        const amount = Number.parseFloat(record.settlement_amount?.amount ?? '0');
+        if (amount > Number.parseFloat(filters.amount_max)) {
+          return false;
+        }
       }
       if (
         filters.booked_from &&
@@ -3356,7 +3635,10 @@ export class ReferenceStore {
   listReportingNotifications(filters = {}) {
     const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
     const offset = decodeCursor(filters.cursor);
-    const records = this.filterReportingNotificationRecords(filters);
+    const records = sortReportingNotificationRecords(
+      this.filterReportingNotificationRecords(filters),
+      filters.sort,
+    );
     const page = records.slice(offset, offset + pageSize);
     const nextOffset = offset + page.length;
 
@@ -3366,6 +3648,95 @@ export class ReferenceStore {
       ...(nextOffset < records.length ? { next_cursor: encodeCursor(nextOffset) } : { next_cursor: null }),
       generated_at: nowIso(),
       notifications: page.map((record) => buildReportingNotificationSummary(record)),
+    };
+  }
+
+  getReportBalanceResponse(filters = {}) {
+    const records = sortReportingNotificationRecords(
+      this.filterReportingNotificationRecords(filters),
+      filters.sort,
+    );
+
+    return buildReportBalanceSnapshots(records);
+  }
+
+  searchReportEntries(filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const offset = decodeCursor(filters.cursor ?? filters.after);
+    const records = sortReportingNotificationRecords(
+      this.filterReportingNotificationRecords(filters),
+      filters.sort,
+    );
+    const page = records.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+
+    return {
+      total_matched: records.length,
+      page_size: page.length,
+      ...(nextOffset < records.length ? { next_cursor: encodeCursor(nextOffset) } : { next_cursor: null }),
+      query_period: {
+        from_date_time: filters.booked_from ?? null,
+        to_date_time: filters.booked_to ?? null,
+      },
+      generated_at: nowIso(),
+      entries: page.map((record) => buildReportEntrySummary(record)),
+    };
+  }
+
+  getReportStats(filters = {}) {
+    const records = this.filterReportingNotificationRecords(filters);
+    const response = {
+      wallet_address: filters.wallet_address ?? null,
+      chain_dli: filters.chain_dli ?? null,
+      period: {
+        from_date_time: filters.booked_from ?? null,
+        to_date_time: filters.booked_to ?? null,
+      },
+      generated_at: nowIso(),
+      totals: buildReportTokenStats(records),
+    };
+
+    if (!filters.group_by) {
+      return response;
+    }
+
+    const groups = new Map();
+    for (const record of records) {
+      const entry = buildReportEntrySummary(record);
+      let dimensionValue = null;
+      switch (filters.group_by) {
+        case 'entry_status':
+          dimensionValue = entry.entry_status;
+          break;
+        case 'finality_status':
+          dimensionValue = entry.finality_status;
+          break;
+        case 'credit_debit':
+          dimensionValue = entry.credit_debit_indicator;
+          break;
+        case 'token':
+          dimensionValue = entry.token_symbol ?? entry.token_dti ?? 'UNKNOWN';
+          break;
+        case 'day':
+          dimensionValue = entry.booking_date ? entry.booking_date.slice(0, 10) : 'UNKNOWN';
+          break;
+        case 'counterparty_wallet':
+          dimensionValue = record.counterparty?.wallet_address ?? 'UNKNOWN';
+          break;
+        default:
+          dimensionValue = 'UNKNOWN';
+      }
+      const existing = groups.get(dimensionValue) ?? [];
+      existing.push(record);
+      groups.set(dimensionValue, existing);
+    }
+
+    return {
+      ...response,
+      breakdown: Array.from(groups.entries()).map(([dimensionValue, groupedRecords]) => ({
+        dimension_value: dimensionValue,
+        totals: buildReportTokenStats(groupedRecords),
+      })),
     };
   }
 
@@ -3454,6 +3825,16 @@ export class ReferenceStore {
       generated_at: nowIso(),
       statements: page.map((record) => buildReportingStatementSummary(record)),
     };
+  }
+
+  getReportingStatementForAccount(filters = {}) {
+    const records = [...this.filterReportingStatementRecords(filters)].sort(
+      (left, right) =>
+        Date.parse(right.period?.to ?? right.statement_date ?? right.updated_at ?? nowIso()) -
+        Date.parse(left.period?.to ?? left.statement_date ?? left.updated_at ?? nowIso()),
+    );
+    const selected = records[0] ?? null;
+    return selected ? this.getReportingStatement(selected.statement_id) : null;
   }
 
   getIntradayReportingView(filters = {}) {

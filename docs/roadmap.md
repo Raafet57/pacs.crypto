@@ -7,7 +7,8 @@ This is the active post-wedge roadmap for `pacs.crypto`.
 The first execution wedge is now complete enough that the next phase is no
 longer about proving the mock reference stack. It is about turning the same
 stack into a real-chain, reviewer-credible execution system without widening
-the API family prematurely.
+the API family prematurely, while tightening conformance against the now-added
+root camt reporting specification.
 
 ## Current Defaults
 
@@ -23,7 +24,7 @@ These defaults are locked for the next phase:
 
 ### Implemented now
 
-- root-level YAML specifications for Travel Rule and instruction submission
+- root-level YAML specifications for Travel Rule, instruction submission, and camt reporting
 - standalone HTML simulators with `Demo` and `Live API` modes
 - reference server with persisted Travel Rule, quote, instruction, status, finality, webhook, reporting, and first-slice exception data
 - pacs.002-like `execution-status` read surface
@@ -33,6 +34,7 @@ These defaults are locked for the next phase:
   - `reporting/notifications` (`camt.054` analogue)
   - `reporting/intraday` (`camt.052` analogue)
   - `reporting/statements` (`camt.053` analogue)
+  - root-spec `/report/*` path family for query, notification lookup, entry search, and stats
 - exception family first slice:
   - `exceptions/investigations` (`camt.029` analogue)
   - `exceptions/returns` (`pacs.004` analogue)
@@ -79,7 +81,30 @@ Current status:
 - in progress: the `sepolia-usdc` adapter is implemented behind the existing adapter seam, read-only mode is available without private key material, and broadcast mode is environment-gated
 - remaining: run a funded-wallet Sepolia transaction and capture the resulting tx hash, confirmations, and finality receipt for the reviewer demo
 
-### Phase B - Reviewer demo with real chain evidence
+### Phase B - Spec 3 reporting alignment
+Target window: Q2 to Q3 2026
+
+Objective:
+Bring the executable reporting runtime closer to `camt-crypto-reporting-v1.yaml`
+without widening the execution corridor.
+
+Deliverables:
+
+- expose the root `/report/*` path family alongside the legacy `/reporting/*` aliases
+- keep entry search, stats, and notification subscription wallet-scoped and test-covered
+- document the remaining shape gaps between the current reference-server records and the root camt.052 / camt.053 / camt.054 wrappers
+
+Success criteria:
+
+- the reference server can be demoed and reviewed against the root reporting spec without relying on extension-only paths
+- reporting search and stats read models line up with the reviewer narrative and traceability story
+
+Current status:
+
+- in progress: `/report/query`, `/report/intraday`, `/report/statement`, `/report/notification/{notificationId}`, `/report/search`, and `/report/stats` now exist in the reference server
+- remaining: tighten the response wire shapes toward the root YAML wrappers and decide whether raw camt.054-style webhook payloads should diverge from or replace the generic event envelope
+
+### Phase C - Reviewer demo with real chain evidence
 Target window: Q3 2026
 
 Objective:
@@ -97,7 +122,7 @@ Success criteria:
 - a reviewer can inspect one live scenario with real chain evidence in under ten minutes
 - the demo strengthens the standards story instead of turning into a generic crypto showcase
 
-### Phase C - Exception handling deepening
+### Phase D - Exception handling deepening
 Target window: Q3 to Q4 2026
 
 Objective:
@@ -115,7 +140,7 @@ Success criteria:
 - real-chain operational follow-up can be tracked without mutating original `FINAL` payments
 - exception-family objects remain distinct from execution-status and finality reads
 
-### Phase D - Delegated signing
+### Phase E - Delegated signing
 Target window: Q4 2026 to Q1 2027
 
 Objective:
@@ -132,7 +157,7 @@ Success criteria:
 - the same corridor supports both `FULL_CUSTODY` and delegated signing
 - delegated signing uses the existing family boundaries rather than a new execution model
 
-### Phase E - Broader expansion
+### Phase F - Broader expansion
 Target window: after Q1 2027
 
 Objective:
