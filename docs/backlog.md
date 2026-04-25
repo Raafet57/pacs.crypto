@@ -44,10 +44,57 @@ These defaults are now part of the backlog, not open questions:
 
 ## Now
 
-### Epic 10 - Testnet execution
+### Epic 10A - Execution safety and evidence hardening
 Priority: `P0`
 Status: `In progress`
 Depends on: completed chain-adapter boundary
+
+Work items:
+
+- make real broadcast an explicit single-writer operation rather than a side
+  effect of read/search/reporting paths
+- prevent duplicate Sepolia transfers under concurrent polling or duplicate
+  lifecycle advancement
+- enforce the narrow live corridor before transfer:
+  - debtor wallet must match the configured signing/source wallet
+  - chain must be Sepolia DLI
+  - token must be USDC DTI/symbol
+  - settlement currency must be USD
+- verify ERC-20 `Transfer` logs before claiming correct final settlement
+- fix debtor-side reporting so a debit observed at `BROADCAST` cannot stay
+  permanently pending after the instruction reaches `FINAL`
+- emit reporting balances with unsigned amounts plus credit/debit indicators
+- harden preflight and demo evidence generation so failed or non-final runs
+  cannot be packaged as reviewer proof
+- correct USDC token identifiers in demo tooling and sample evidence
+
+Current status:
+
+- review found execution safety issues that must be fixed before any funded
+  Sepolia run
+- automated happy-path Sepolia lifecycle coverage exists, but it uses injected
+  provider/signer stubs and does not prove funded safety
+- real funded-wallet broadcast is blocked until this epic is closed
+
+Acceptance criteria:
+
+- no `GET`, search, reporting, duplicate-check, or list path can submit a real
+  transaction
+- concurrent polling cannot produce duplicate broadcasts for the same
+  instruction
+- the adapter rejects source/debtor mismatch, wrong chain, wrong token, and
+  wrong settlement currency before transfer
+- finality receipt verifies the ERC-20 transfer log for token contract, sender,
+  recipient, and amount
+- debtor reporting upgrades from pending to booked after final settlement
+- preflight fails when configured funds are insufficient for the demo amount
+- demo runner exits non-zero unless execution status and finality are both
+  `FINAL`
+
+### Epic 10 - Testnet execution
+Priority: `P1`
+Status: `Blocked`
+Depends on: Epic 10A
 
 Work items:
 
@@ -66,6 +113,7 @@ Current status:
 - incomplete broadcast configuration fails safely
 - wrong-network RPC configuration now fails safely
 - preflight and demo-run scripts now exist for the funded-wallet path
+- live execution is blocked by the Epic 10A safety and evidence review findings
 - real funded-wallet broadcast still needs to be run and captured
 
 Acceptance criteria:
@@ -80,7 +128,7 @@ Acceptance criteria:
 ### Epic 11 - Demo with real chain evidence
 Priority: `P1`
 Status: `Planned`
-Depends on: Epic 10
+Depends on: Epic 10A and Epic 10
 
 Work items:
 
@@ -93,6 +141,7 @@ Current status:
 
 - real-chain demo runner and preflight scripts are in place for the funded-wallet path
 - reviewer-summary generation is now scripted so a captured run can be turned into a Tom-facing markdown evidence pack immediately
+- reviewer evidence generation must not be used for a funded run until Epic 10A is complete
 
 Acceptance criteria:
 
@@ -103,7 +152,7 @@ Acceptance criteria:
 ### Epic 12 - Deepen exception handling
 Priority: `P1`
 Status: `In progress`
-Depends on: Epic 10
+Depends on: Epic 10A and Epic 10 for real-chain evidence linkage
 
 Work items:
 

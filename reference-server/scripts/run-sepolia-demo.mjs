@@ -10,7 +10,7 @@ const DEFAULT_AMOUNT = '1.00';
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
 const DEFAULT_TIMEOUT_MS = 300_000;
 const CHAIN_DLI = 'X9J9XDMTD';
-const TOKEN_DTI = '4H95J0R2X';
+const TOKEN_DTI = 'T9B3X8H2K';
 
 function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;

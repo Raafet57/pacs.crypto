@@ -309,6 +309,7 @@ function buildInstructionResponse(record, chainAdapter = null) {
     instruction_id: record.instruction_id,
     uetr: record.uetr,
     status: record.status,
+    failure_reason: record.failure_reason ?? null,
     custody_model: record.custody_model,
     fee_estimate: record.fee_estimate,
     expiry_date_time: record.expiry_date_time,
@@ -550,6 +551,32 @@ function appendInstructionStatusEvent(record, status, statusAt, failureReason = 
   ];
 }
 
+function buildInstructionLifecycleUpdate(record, lifecycleState) {
+  const status = lifecycleState.status;
+  const failureReason = lifecycleState.failureReason;
+  const updatedAt =
+    status === record.status ? record.updated_at : new Date().toISOString();
+
+  return {
+    ...record,
+    status,
+    updated_at: updatedAt,
+    failure_reason: failureReason,
+    status_history:
+      status === record.status
+        ? record.status_history
+        : appendInstructionStatusEvent(
+            record,
+            status,
+            updatedAt,
+            failureReason,
+          ),
+    on_chain_settlement: {
+      ...lifecycleState.onChainSettlement,
+    },
+  };
+}
+
 function normalizeTravelRuleSubmission(submission) {
   const travelRuleData = {
     ...(submission.travel_rule_data ?? {}),
@@ -604,7 +631,7 @@ function normalizeInstructionSubmission(submission) {
     blockchain_instruction: {
       token: {
         token_symbol: token.token_symbol ?? submission.currency ?? 'USDC',
-        token_dti: token.token_dti ?? '4H95J0R2X',
+        token_dti: token.token_dti ?? 'T9B3X8H2K',
         ...token,
       },
       chain_dli: blockchainInstruction.chain_dli ?? submission.chain_dli ?? 'X9J9XDMTD',
@@ -3081,6 +3108,22 @@ export class ReferenceStore {
     this.appendInstructionOutboxEvents(record, null);
     this.appendReportingNotifications(record);
 
+    if (
+      typeof this.chainAdapter.submitLifecycleState === 'function' &&
+      initialStatus === 'PENDING'
+    ) {
+      const lifecycleState = await this.chainAdapter.submitLifecycleState(record);
+      const submitted = buildInstructionLifecycleUpdate(record, lifecycleState);
+      if (serialize(submitted) !== serialize(record)) {
+        this.saveInstruction(submitted, {
+          previousRecord: record,
+          emitEvents: true,
+          emitNotifications: true,
+        });
+        return submitted;
+      }
+    }
+
     return record;
   }
 
@@ -5080,32 +5123,7 @@ export class ReferenceStore {
     }
 
     const lifecycleState = this.chainAdapter.deriveLifecycleState(normalized);
-    const status = lifecycleState.status;
-    const failureReason = lifecycleState.failureReason;
-
-    const updatedAt =
-      status === normalized.status
-        ? normalized.updated_at
-        : new Date().toISOString();
-
-    const updated = {
-      ...normalized,
-      status,
-      updated_at: updatedAt,
-      failure_reason: failureReason,
-      status_history:
-        status === normalized.status
-          ? normalized.status_history
-          : appendInstructionStatusEvent(
-              normalized,
-              status,
-              updatedAt,
-              failureReason,
-            ),
-      on_chain_settlement: {
-        ...lifecycleState.onChainSettlement,
-      },
-    };
+    const updated = buildInstructionLifecycleUpdate(normalized, lifecycleState);
 
     if (persist && serialize(updated) !== serialize(record)) {
       this.saveInstruction(updated, {
@@ -5143,32 +5161,7 @@ export class ReferenceStore {
     }
 
     const lifecycleState = await this.chainAdapter.deriveLifecycleState(normalized);
-    const status = lifecycleState.status;
-    const failureReason = lifecycleState.failureReason;
-
-    const updatedAt =
-      status === normalized.status
-        ? normalized.updated_at
-        : new Date().toISOString();
-
-    const updated = {
-      ...normalized,
-      status,
-      updated_at: updatedAt,
-      failure_reason: failureReason,
-      status_history:
-        status === normalized.status
-          ? normalized.status_history
-          : appendInstructionStatusEvent(
-              normalized,
-              status,
-              updatedAt,
-              failureReason,
-            ),
-      on_chain_settlement: {
-        ...lifecycleState.onChainSettlement,
-      },
-    };
+    const updated = buildInstructionLifecycleUpdate(normalized, lifecycleState);
 
     if (persist && serialize(updated) !== serialize(record)) {
       this.saveInstruction(updated, {

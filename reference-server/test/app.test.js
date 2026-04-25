@@ -31,7 +31,7 @@ function buildQuoteRequest(overrides = {}) {
     {
       token: {
         token_symbol: 'USDC',
-        token_dti: '4H95J0R2X',
+        token_dti: 'T9B3X8H2K',
       },
       chain_dli: 'X9J9XDMTD',
       amount: '250000.00',
@@ -70,9 +70,9 @@ function buildInstructionPayload(overrides = {}) {
         currency: 'USD',
       },
       blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+      token: {
+        token_symbol: 'USDC',
+        token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -804,7 +804,7 @@ test('ramp instructions fail early when estimated slippage exceeds the configure
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -875,7 +875,7 @@ test('delegated signing remains explicitly out of scope', async () => {
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'DELEGATED_SIGNING',
@@ -1686,7 +1686,7 @@ test('reporting notifications are created when an instruction reaches settlement
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -1835,7 +1835,7 @@ test('reporting notifications are emitted through outbox and webhook delivery', 
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -1932,7 +1932,7 @@ test('intraday reporting view summarizes booked movements and supports account f
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -2029,7 +2029,7 @@ test('statement reporting derives persisted account statements from reporting no
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -2279,7 +2279,7 @@ test('report spec paths expose search stats intraday statement and notification 
       blockchain_instruction: {
         token: {
           token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
+          token_dti: 'T9B3X8H2K',
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
@@ -3007,6 +3007,8 @@ test('Sepolia broadcast mode fails safely when execution credentials are incompl
   });
 
   assert.equal(createResponse.statusCode, 201);
+  assert.equal(createResponse.json().status, 'FAILED');
+  assert.match(createResponse.json().failure_reason, /RPC URL/);
 
   const statusResponse = await app.inject({
     method: 'GET',
@@ -3059,6 +3061,8 @@ test('Sepolia broadcast mode fails safely when RPC is not actually Sepolia', asy
   });
 
   assert.equal(createResponse.statusCode, 201);
+  assert.equal(createResponse.json().status, 'FAILED');
+  assert.match(createResponse.json().failure_reason, /expected Sepolia/i);
 
   const statusResponse = await app.inject({
     method: 'GET',
@@ -3070,6 +3074,179 @@ test('Sepolia broadcast mode fails safely when RPC is not actually Sepolia', asy
   assert.match(statusResponse.json().failure_reason, /expected Sepolia/i);
   assert.equal(statusResponse.json().transaction_hash, null);
   assertAdapterMetadataShape(statusResponse.json().adapter_metadata, 'sepolia-usdc');
+
+  await app.close();
+});
+
+test('Sepolia broadcast mode rejects debtor wallet mismatch before transfer', async () => {
+  const sourceAddress = '0x00000000000000000000000000000000000000aa';
+  const observedTransfers = [];
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      provider: {
+        async getNetwork() {
+          return { chainId: 11155111n, name: 'sepolia' };
+        },
+      },
+      rpcUrl: 'https://rpc.example.invalid',
+      privateKey:
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      sourceAddress,
+      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      broadcastEnabled: true,
+      walletFactory() {
+        return {
+          address: sourceAddress,
+        };
+      },
+      contractFactory() {
+        return {
+          async transfer() {
+            observedTransfers.push(true);
+            return { hash: `0x${'b'.repeat(64)}` };
+          },
+        };
+      },
+    }),
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SEPOLIA-SOURCE-MISMATCH-001',
+      },
+      interbank_settlement_amount: {
+        amount: '10.00',
+        currency: 'USD',
+      },
+      debtor_account: {
+        proxy: {
+          identification: '0x00000000000000000000000000000000000000cc',
+        },
+      },
+      creditor_account: {
+        proxy: {
+          identification: '0x00000000000000000000000000000000000000bb',
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  assert.equal(createResponse.json().status, 'FAILED');
+  assert.match(createResponse.json().failure_reason, /debtor wallet/i);
+  assert.equal(observedTransfers.length, 0);
+
+  await app.close();
+});
+
+test('Sepolia broadcast mode rejects invalid corridor metadata before transfer', async () => {
+  const sourceAddress = '0x00000000000000000000000000000000000000aa';
+  const observedTransfers = [];
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      provider: {
+        async getNetwork() {
+          return { chainId: 11155111n, name: 'sepolia' };
+        },
+      },
+      rpcUrl: 'https://rpc.example.invalid',
+      privateKey:
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      sourceAddress,
+      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      broadcastEnabled: true,
+      walletFactory() {
+        return {
+          address: sourceAddress,
+        };
+      },
+      contractFactory() {
+        return {
+          async transfer() {
+            observedTransfers.push(true);
+            return { hash: `0x${'c'.repeat(64)}` };
+          },
+        };
+      },
+    }),
+  });
+
+  const cases = [
+    {
+      endToEndIdentification: 'INV-SEPOLIA-CORRIDOR-CHAIN-001',
+      overrides: {
+        blockchain_instruction: {
+          token: {
+            token_symbol: 'USDC',
+            token_dti: 'T9B3X8H2K',
+          },
+          chain_dli: '4H95J0R2X',
+          custody_model: 'FULL_CUSTODY',
+        },
+      },
+      expectedFailure: /chain_dli/i,
+    },
+    {
+      endToEndIdentification: 'INV-SEPOLIA-CORRIDOR-TOKEN-001',
+      overrides: {
+        blockchain_instruction: {
+          token: {
+            token_symbol: 'BTC',
+            token_dti: '4H95J0R2X',
+          },
+          chain_dli: 'X9J9XDMTD',
+          custody_model: 'FULL_CUSTODY',
+        },
+      },
+      expectedFailure: /token_dti/i,
+    },
+    {
+      endToEndIdentification: 'INV-SEPOLIA-CORRIDOR-CURRENCY-001',
+      overrides: {
+        interbank_settlement_amount: {
+          amount: '10.00',
+          currency: 'EUR',
+        },
+      },
+      expectedFailure: /currency/i,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/instruction',
+      payload: buildInstructionPayload({
+        payment_identification: {
+          end_to_end_identification: testCase.endToEndIdentification,
+        },
+        interbank_settlement_amount: {
+          amount: '10.00',
+          currency: 'USD',
+        },
+        debtor_account: {
+          proxy: {
+            identification: sourceAddress,
+          },
+        },
+        creditor_account: {
+          proxy: {
+            identification: '0x00000000000000000000000000000000000000bb',
+          },
+        },
+        ...testCase.overrides,
+      }),
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+    assert.equal(createResponse.json().status, 'FAILED');
+    assert.match(createResponse.json().failure_reason, testCase.expectedFailure);
+  }
+
+  assert.equal(observedTransfers.length, 0);
 
   await app.close();
 });
@@ -3148,6 +3325,11 @@ test('Sepolia broadcast mode can progress from broadcast to final and surface re
         amount: '10.00',
         currency: 'USD',
       },
+      debtor_account: {
+        proxy: {
+          identification: sourceAddress,
+        },
+      },
       creditor_account: {
         proxy: {
           identification: recipientAddress,
@@ -3157,7 +3339,11 @@ test('Sepolia broadcast mode can progress from broadcast to final and surface re
   });
 
   assert.equal(createResponse.statusCode, 201);
-  assert.equal(createResponse.json().status, 'PENDING');
+  assert.equal(createResponse.json().status, 'BROADCAST');
+  assert.equal(observedTransfers.length, 1);
+  assert.equal(observedTransfers[0].recipient, recipientAddress);
+  assert.equal(String(observedTransfers[0].amount), '10000000');
+  assert.equal(observedTransfers[0].txOverrides.gasLimit, 91000n);
 
   const broadcastStatusResponse = await app.inject({
     method: 'GET',
@@ -3169,9 +3355,15 @@ test('Sepolia broadcast mode can progress from broadcast to final and surface re
   assert.equal(broadcastStatusResponse.json().transaction_hash, transactionHash);
   assert.equal(broadcastStatusResponse.json().adapter_metadata.adapter_mode, 'TESTNET_BROADCAST');
   assert.equal(observedTransfers.length, 1);
-  assert.equal(observedTransfers[0].recipient, recipientAddress);
-  assert.equal(String(observedTransfers[0].amount), '10000000');
-  assert.equal(observedTransfers[0].txOverrides.gasLimit, 91000n);
+
+  const instructionSearchResponse = await app.inject({
+    method: 'GET',
+    url: '/instruction/search?status=BROADCAST&chain_dli=X9J9XDMTD',
+  });
+
+  assert.equal(instructionSearchResponse.statusCode, 200);
+  assert.equal(instructionSearchResponse.json().total_matched, 1);
+  assert.equal(observedTransfers.length, 1);
 
   chainState.receipt = {
     blockNumber: 100,

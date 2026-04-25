@@ -5,10 +5,11 @@
 This is the active post-wedge roadmap for `pacs.crypto`.
 
 The first execution wedge is now complete enough that the next phase is no
-longer about proving the mock reference stack. It is about turning the same
-stack into a real-chain, reviewer-credible execution system without widening
-the API family prematurely, while tightening conformance against the now-added
-root camt reporting specification.
+longer about proving the mock reference stack. It is about hardening the
+execution path before funded use, then turning the same stack into a
+real-chain, reviewer-credible execution system without widening the API family
+prematurely, while tightening conformance against the now-added root camt
+reporting specification.
 
 ## Current Defaults
 
@@ -41,7 +42,8 @@ These defaults are locked for the next phase:
 
 ### Still mocked or partial
 
-- chain lifecycle still runs through a mock adapter rather than real chain execution
+- chain lifecycle has an opt-in Sepolia adapter, but funded execution is blocked
+  until the execution-safety review findings are remediated
 - the current reviewer demo is still mock-backed even though the stack itself is executable
 - delegated signing remains intentionally unimplemented
 - broader exception workflow is still shallow compared with real operator remediation
@@ -56,8 +58,49 @@ These defaults are locked for the next phase:
 
 ## Roadmap
 
+### Phase A0 - Execution safety and evidence hardening
+Target window: Q2 2026
+
+Objective:
+Close the review findings that make funded Sepolia execution unsafe or
+misleading before any live transfer is run for reviewer evidence.
+
+Deliverables:
+
+- single-writer broadcast path so real transfers cannot be submitted by
+  `GET`, search, reporting, duplicate-check, or list flows
+- idempotent execution guard that prevents duplicate transfers under concurrent
+  polling
+- Sepolia USDC corridor enforcement before transfer: debtor/source wallet,
+  Sepolia DLI, USDC token identity, and USD settlement currency
+- ERC-20 `Transfer` log verification before finality receipt claims correct
+  settlement
+- reporting state upgrade so debtor-side pending debit entries become booked
+  after final settlement
+- unsigned reporting balance amounts with credit/debit indicators
+- hardened preflight and demo evidence generation that reject failed or
+  non-final runs as reviewer proof
+- corrected USDC token identifiers across demo tooling and sample evidence
+
+Success criteria:
+
+- no read-side route can broadcast or duplicate a real transaction
+- finality evidence proves token contract, sender, recipient, and amount from
+  chain logs
+- reporting statements include finalized debtor and creditor booked movement
+- preflight fails when the configured wallet cannot execute the demo amount
+- reviewer evidence is generated only for runs where execution status and
+  finality are both `FINAL`
+
+Current status:
+
+- in progress: review findings are documented and now gate funded Sepolia use
+- remaining: implement and test the hardening items before running a funded
+  Sepolia transaction
+
 ### Phase A - Real Sepolia execution
 Target window: Q2 to Q3 2026
+Depends on: Phase A0
 
 Objective:
 Replace the mocked EVM lifecycle with real Sepolia execution while preserving
@@ -75,12 +118,14 @@ Success criteria:
 - one instruction can progress from submit to real Sepolia tx hash without route redesign
 - `execution-status` and `finality-receipt` remain the canonical read models
 - reporting, webhooks, and exceptions keep using the same identifiers
+- no `GET`, search, or reporting path can submit or duplicate a real transaction
 
 Current status:
 
 - in progress: the `sepolia-usdc` adapter is implemented behind the existing adapter seam, read-only mode is available without private key material, and broadcast mode is environment-gated
 - in progress: the happy-path `BROADCAST -> CONFIRMING -> FINAL` Sepolia lifecycle is now covered in automated tests with injected provider/signer stubs, including reporting linkage on the same instruction identifiers
 - in progress: preflight and demo-run scripts now exist to validate wallet readiness and capture a real-chain evidence bundle once credentials are present
+- blocked: funded Sepolia execution waits for Phase A0 hardening
 - remaining: run a funded-wallet Sepolia transaction and capture the resulting tx hash, confirmations, and finality receipt for the reviewer demo
 
 ### Phase B - Spec 3 reporting alignment
@@ -111,6 +156,7 @@ Current status:
 
 ### Phase C - Reviewer demo with real chain evidence
 Target window: Q3 2026
+Depends on: Phase A0 and Phase A
 
 Objective:
 Turn the reviewer package into a real-chain proof point rather than a strong
@@ -126,11 +172,13 @@ Success criteria:
 
 - a reviewer can inspect one live scenario with real chain evidence in under ten minutes
 - the demo strengthens the standards story instead of turning into a generic crypto showcase
+- reviewer evidence is generated only from `FINAL` runs with verified transfer logs
 
 Current status:
 
 - in progress: preflight and demo-run scripts exist for the funded Sepolia path
 - in progress: reviewer-summary generation is scripted so a captured run can be turned into a concise markdown evidence pack immediately after execution
+- blocked: the first funded evidence bundle waits for Phase A0 and Phase A
 - remaining: capture one funded Sepolia run and freeze it as the canonical reviewer sample path
 
 ### Phase D - Exception handling deepening

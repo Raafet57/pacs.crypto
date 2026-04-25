@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 const SEPOLIA_CHAIN_DLI = 'X9J9XDMTD';
 const SEPOLIA_CHAIN_ID = 11155111n;
+const SEPOLIA_USDC_TOKEN_DTI = 'T9B3X8H2K';
 const DEFAULT_REQUIRED_CONFIRMATIONS = 3;
 const DEFAULT_USDC_DECIMALS = 6;
 const DEFAULT_GAS_LIMIT = 85000;
@@ -30,6 +31,22 @@ function normalizeHex(value) {
   return normalized.startsWith('0x') ? normalized : `0x${normalized}`;
 }
 
+function normalizeIdentifier(value, prefix = null) {
+  if (!hasText(value)) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (prefix && normalized.toUpperCase().startsWith(`${prefix}/`)) {
+    return normalized.slice(prefix.length + 1);
+  }
+  return normalized;
+}
+
+function normalizeComparisonAddress(value) {
+  return normalizeHex(value)?.toLowerCase() ?? null;
+}
+
 function normalizeInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -45,6 +62,47 @@ function getRecipientAddress(input = {}) {
     normalizeHex(input.blockchain_instruction?.destination_wallet_address) ??
     null
   );
+}
+
+function getDebtorAddress(input = {}) {
+  return (
+    normalizeHex(input.debtor_account?.proxy?.identification) ??
+    normalizeHex(input.blockchain_instruction?.source_wallet_address) ??
+    null
+  );
+}
+
+function validateSepoliaUsdcCorridor({ config, record, wallet }) {
+  const chainDli = normalizeIdentifier(
+    record.blockchain_instruction?.chain_dli,
+    'DLID',
+  );
+  if (chainDli !== SEPOLIA_CHAIN_DLI) {
+    return `Sepolia USDC broadcast requires chain_dli ${SEPOLIA_CHAIN_DLI}.`;
+  }
+
+  const token = record.blockchain_instruction?.token ?? {};
+  const tokenDti = normalizeIdentifier(token.token_dti, 'DTID');
+  const tokenSymbol = token.token_symbol?.toUpperCase?.() ?? null;
+  if (tokenDti !== SEPOLIA_USDC_TOKEN_DTI || tokenSymbol !== 'USDC') {
+    return `Sepolia USDC broadcast requires token_dti ${SEPOLIA_USDC_TOKEN_DTI} and token_symbol USDC.`;
+  }
+
+  const settlementCurrency = record.interbank_settlement_amount?.currency ?? null;
+  if (settlementCurrency !== 'USD') {
+    return 'Sepolia USDC broadcast requires interbank_settlement_amount.currency USD.';
+  }
+
+  const debtorAddress = normalizeComparisonAddress(getDebtorAddress(record));
+  const sourceAddress = normalizeComparisonAddress(config.sourceAddress ?? wallet.address);
+  if (!debtorAddress) {
+    return 'Sepolia USDC broadcast requires debtor_account.proxy.identification as source wallet address.';
+  }
+  if (debtorAddress !== sourceAddress) {
+    return 'Sepolia USDC broadcast requires debtor wallet to match the configured source wallet.';
+  }
+
+  return null;
 }
 
 function buildFallbackFeeEstimate(config = {}) {
@@ -338,6 +396,19 @@ async function broadcastUsdcTransfer({ config, provider, record, settlement }) {
     };
   }
 
+  const corridorFailure = validateSepoliaUsdcCorridor({
+    config,
+    record,
+    wallet,
+  });
+  if (corridorFailure) {
+    return {
+      status: 'FAILED',
+      failureReason: corridorFailure,
+      onChainSettlement: settlement,
+    };
+  }
+
   const contract = buildUsdcContract(config, wallet);
   const amount = parseUnits(
     record.interbank_settlement_amount?.amount ?? '0',
@@ -475,12 +546,34 @@ export function createSepoliaUsdcAdapter(config = {}) {
         };
       }
 
-      if (!normalizedConfig.broadcastEnabled) {
+      return {
+        status: record.status,
+        failureReason: record.failure_reason ?? null,
+        onChainSettlement: normalizedSettlement,
+      };
+    },
+
+    async submitLifecycleState(record) {
+      const normalizedSettlement = this.normalizeOnChainSettlement(
+        record.on_chain_settlement,
+        record.interbank_settlement_amount?.amount,
+        record,
+      );
+
+      if (record.status === 'PENDING' && this.hasExpired(record.expiry_date_time)) {
         return {
-          status: record.status,
-          failureReason: record.failure_reason ?? null,
+          status: 'EXPIRED',
+          failureReason: 'Instruction expired before execution.',
           onChainSettlement: normalizedSettlement,
         };
+      }
+
+      if (
+        !normalizedConfig.broadcastEnabled ||
+        normalizedSettlement.transaction_hash ||
+        !['PENDING', 'BROADCAST', 'CONFIRMING'].includes(record.status)
+      ) {
+        return this.deriveLifecycleState(record);
       }
 
       try {
