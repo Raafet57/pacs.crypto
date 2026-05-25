@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blockchain Exception and Investigation API v1.3 – pacs.crypto</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#21262d;
+      --border:#30363d;--border-hi:#388bfd;
+      --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+      --blue:#388bfd;--blue-bg:rgba(56,139,253,.12);
+      --green:#3fb950;--green-bg:rgba(63,185,80,.1);
+      --amber:#d29922;--amber-bg:rgba(210,153,34,.1);
+      --red:#f85149;--purple:#bc8cff;--cyan:#79c0ff;--teal:#39d353;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+
+    header{background:var(--surface);border-bottom:1px solid var(--border);height:52px;
+      display:flex;align-items:center;gap:10px;padding:0 20px;position:sticky;top:0;z-index:99}
+    .logo{width:28px;height:28px;background:linear-gradient(135deg,#7b3fd9,#bc8cff);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+    header h1{font-size:13px;font-weight:500;white-space:nowrap}
+    .hbadge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid;white-space:nowrap}
+    .hb-purple{color:var(--purple);background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.25)}
+    .hb-cyan{color:var(--cyan);background:rgba(121,192,255,.07);border-color:rgba(121,192,255,.2)}
+    .hb-amber{color:var(--amber);background:var(--amber-bg);border-color:rgba(210,153,34,.25)}
+    .hb-green{color:var(--green);background:var(--green-bg);border-color:rgba(63,185,80,.25)}
+    .hb-ver{color:var(--muted);background:var(--surface3);border-color:var(--border)}
+    .hspace{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+    .app{display:grid;grid-template-columns:320px 1fr 1fr;height:calc(100vh - 52px);overflow:hidden}
+
+    aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .sb-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .sb-tab{flex:1;padding:9px 4px;font-family:var(--mono);font-size:10px;font-weight:700;
+      background:transparent;border:none;color:var(--dim);cursor:pointer;
+      border-bottom:2px solid transparent;transition:all .15s;text-align:center}
+    .sb-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+    .sb-pane{display:none;flex:1;overflow-y:auto;padding:14px}
+    .sb-pane.active{display:block}
+
+    .sb-title{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}
+    .mtabs{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
+    .mtab{flex:1;padding:5px 3px;font-family:var(--mono);font-size:10px;font-weight:700;
+      border:1px solid var(--border);border-radius:4px;background:transparent;
+      color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;min-width:40px}
+    .mtab.ap{background:var(--green-bg);border-color:rgba(63,185,80,.4);color:var(--green)}
+    .mtab.ag{background:var(--blue-bg);border-color:rgba(56,139,253,.4);color:var(--blue)}
+    .mtab.ard{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red)}
+    .mtab.arp{background:rgba(188,140,255,.1);border-color:rgba(188,140,255,.35);color:var(--purple)}
+    .ep{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-bottom:11px;word-break:break-all}
+    .mpill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px}
+    .pp{background:rgba(63,185,80,.18);color:var(--green)}
+    .gp{background:rgba(56,139,253,.15);color:var(--blue)}
+    .rp-pill{background:rgba(248,81,73,.15);color:var(--red)}
+    .pup{background:rgba(188,140,255,.18);color:var(--purple)}
+
+    select{width:100%;background:var(--surface3);border:1px solid var(--border);
+      border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;
+      padding:7px 9px;cursor:pointer;outline:none;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%237d8590' d='M5 7L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 9px center}
+    select:focus{border-color:var(--border-hi)}
+    .si{margin-top:8px;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;font-size:11px;
+      color:var(--muted);line-height:1.6}
+    .si strong{color:var(--cyan)}
+    .fsec{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;padding:10px 0 6px;
+      border-bottom:1px solid var(--border);margin-bottom:8px;margin-top:4px}
+    .fg{margin-bottom:7px}
+    .fl{font-size:10px;font-weight:500;color:var(--muted);margin-bottom:3px;
+      display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+    .ft{font-family:var(--mono);font-size:8px;color:var(--purple);
+      background:rgba(188,140,255,.08);border:1px solid rgba(188,140,255,.2);
+      border-radius:2px;padding:0 4px}
+    .freq{font-family:var(--mono);font-size:8px;color:var(--red);
+      background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);
+      border-radius:2px;padding:0 4px}
+    input[type=text],input[type=number],textarea{width:100%;background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;color:var(--text);
+      font-family:var(--mono);font-size:11px;padding:6px 9px;outline:none;transition:border-color .15s}
+    input:focus,textarea:focus{border-color:var(--border-hi)}
+    textarea{resize:vertical;min-height:40px;line-height:1.5}
+    .callout{background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;
+      padding:8px 11px;font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+    .callout code{font-family:var(--mono);font-size:10px;color:var(--cyan);
+      background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px}
+    .callout-amber{border-left-color:var(--amber);background:rgba(210,153,34,.06);border-color:rgba(210,153,34,.2)}
+    .callout-amber code{color:var(--amber);background:rgba(210,153,34,.08)}
+    .callout-green{border-left-color:var(--green);background:rgba(63,185,80,.04);border-color:rgba(63,185,80,.2)}
+
+    .sbtn{width:100%;padding:9px;border:none;border-radius:6px;font-family:var(--mono);
+      font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em;
+      transition:all .15s;display:flex;align-items:center;justify-content:center;
+      gap:7px;margin-top:8px}
+    .sbtn.sp{background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff}
+    .sbtn.sg{background:linear-gradient(135deg,#1b6fd9,#388bfd);color:#fff}
+    .sbtn.sr{background:linear-gradient(135deg,#b62324,#f85149);color:#fff}
+    .sbtn.spu{background:linear-gradient(135deg,#7b3fd9,#bc8cff);color:#fff}
+    .sbtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+    .sbtn:active{transform:translateY(0);filter:brightness(.95)}
+
+    .panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+    .ph{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .pt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .pm{font-family:var(--mono);font-size:10px;color:var(--dim)}
+    .jv{flex:1;overflow-y:auto;padding:18px;font-family:var(--mono);font-size:11.5px;
+      line-height:1.7;background:var(--bg)}
+    .jv pre{white-space:pre-wrap;word-break:break-word}
+    .j-key{color:#79c0ff}.j-str{color:#a5d6ff}.j-num{color:#f2cc60}
+    .j-bool{color:#ff7b72}.j-null{color:var(--dim)}
+
+    .rp{display:flex;flex-direction:column;overflow:hidden}
+    .rh{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:44px}
+    .sbadge{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px}
+    .s201,.s200{background:var(--green-bg);border:1px solid rgba(63,185,80,.35);color:var(--green)}
+    .s409{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--amber)}
+    .s404,.s400,.s422{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+    .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
+    .rb{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
+    .ch{padding:9px 13px;background:var(--surface2);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:7px}
+    .ct{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .cb{padding:12px}
+    .dr{display:grid;grid-template-columns:160px 1fr;gap:6px;padding:4px 0;
+      border-bottom:1px solid var(--border);align-items:start}
+    .dr:last-child{border-bottom:none}
+    .dk{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .dv{font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-all}
+    .dv.hi{color:var(--cyan)}.dv.ok{color:var(--green)}.dv.wa{color:var(--amber)}.dv.er{color:var(--red)}
+    .dv.addr{color:var(--purple);font-size:9.5px}
+
+    .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .pbox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .prole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+    .pname{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .pdet{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:2px}
+    .paddr{font-family:var(--mono);font-size:9px;color:var(--purple);
+      background:rgba(188,140,255,.06);border-radius:3px;padding:3px 6px;margin-top:4px;word-break:break-all}
+    .agrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .abox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:8px 10px}
+    .arole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+    .aname{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .alei{font-family:var(--mono);font-size:9px;color:var(--muted)}
+    .apill{display:inline-flex;align-items:center;gap:8px;background:var(--surface3);
+      border:1px solid var(--border);border-radius:16px;padding:5px 13px;
+      font-family:var(--mono);font-size:12px;margin-bottom:6px}
+    .at{color:var(--amber);font-weight:700}.af{color:var(--dim);font-size:10px}
+    .dti-tag{color:var(--purple);font-size:9px;background:rgba(188,140,255,.07);
+      padding:1px 6px;border-radius:3px;margin-left:4px}
+
+    /* Status flow */
+    .sflow{display:flex;align-items:center;padding:8px 0}
+    .fstep{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px}
+    .fdot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border);background:var(--bg)}
+    .fdot.done{background:var(--green);border-color:var(--green)}
+    .fdot.cur{background:var(--blue);border-color:var(--blue);box-shadow:0 0 8px rgba(56,139,253,.5)}
+    .fdot.fail{background:var(--red);border-color:var(--red)}
+    .fline{flex:1;height:2px;background:var(--border);min-width:10px;margin-top:-19px}
+    .fline.done{background:var(--green)}
+    .flabel{font-family:var(--mono);font-size:7.5px;color:var(--dim);text-align:center;line-height:1.3}
+    .flabel.done{color:var(--green)}.flabel.cur{color:var(--blue)}.flabel.fail{color:var(--red)}
+
+    /* Fee breakdown */
+    .fee-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:8px}
+    .fee-box{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px;text-align:center}
+    .fee-amt{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)}
+    .fee-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
+    .fee-lock{display:inline-block;font-family:var(--mono);font-size:8px;font-weight:700;
+      padding:2px 7px;border-radius:10px;margin-top:6px}
+    .fl-capped{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .fl-exact{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .fl-indicative{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+
+    /* Chain health */
+    .congestion{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;
+      padding:2px 8px;border-radius:10px}
+    .cong-low{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .cong-med{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .cong-high{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+
+    /* Finality */
+    .fin-bar-wrap{background:var(--surface3);border-radius:4px;height:8px;margin:6px 0}
+    .fin-bar{height:8px;border-radius:4px;transition:width .6s ease}
+    .fin-prob{background:var(--amber)}
+    .fin-final{background:var(--green)}
+
+    /* Ramp flow */
+    .ramp-flow{display:flex;align-items:center;gap:6px;padding:8px;
+      background:var(--surface3);border-radius:5px;margin-bottom:8px}
+    .ramp-box{flex:1;background:var(--surface2);border:1px solid var(--border);
+      border-radius:4px;padding:6px 9px;text-align:center}
+    .ramp-label{font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:2px;text-transform:uppercase}
+    .ramp-val{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--amber)}
+    .ramp-arrow{color:var(--purple);font-size:16px;flex-shrink:0}
+
+    /* Slippage exceeded */
+    .slip-alert{background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.3);
+      border-radius:5px;padding:12px;text-align:center}
+
+    .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:10px;color:var(--dim);padding:40px;text-align:center}
+    .ei{font-size:36px;opacity:.4}.et{font-size:15px;font-style:italic;color:var(--muted)}
+    .es{font-size:11px;line-height:1.6;max-width:240px}
+    .ldots{display:flex;gap:4px;align-items:center}
+    .ldots span{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:blink 1.2s infinite}
+    .ldots span:nth-child(2){animation-delay:.2s}.ldots span:nth-child(3){animation-delay:.4s}
+    @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+    @keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .ani{animation:fi .22s ease forwards}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+    /* Search rows */
+    .sr-list{display:flex;flex-direction:column;gap:6px}
+    .sr-row{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .sr-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
+    .sr-id{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .sr-parties{font-size:11px;margin-bottom:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .sr-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+    .sr-amt{font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600}
+    .status-pill{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 7px;border-radius:10px}
+    .st-final{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .st-confirming{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .st-pending{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .st-failed,.st-slippage{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+    .st-cancelled,.st-expired{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">EI</div>
+  <h1>Blockchain Exception and Investigation API v1.3</h1>
+  <div class="hspace">
+    <span class="hbadge hb-ver">v1.3.0</span>
+    <span class="hbadge hb-purple">camt.110 / camt.111</span>
+    <span class="hbadge hb-cyan">pacs.crypto</span>
+    <span class="hbadge hb-green">OpenAPI 3.1.0</span>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside>
+  <div class="sb-tabs">
+    <button class="sb-tab active" onclick="switchTab('config')">⚙ Config</button>
+    <button class="sb-tab" onclick="switchTab('parties')">👤 Parties</button>
+    <button class="sb-tab" onclick="switchTab('content')">📝 Content</button>
+    <button class="sb-tab" onclick="switchTab('refs')">🔗 Refs</button>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="sb-pane active" id="tab-config">
+    <div class="callout" style="margin-bottom:12px">
+      <strong style="color:var(--cyan)">camt.110/111 aligned:</strong>
+      Investigation request and response data model lifted from
+      <code>InvestigationRequestV02</code> / <code>InvestigationResponseV03</code>,
+      with a deliberately narrowed type and reason vocabulary.
+    </div>
+
+    <div class="sb-title">Operation</div>
+    <div class="mtabs">
+      <button class="mtab ap" id="tab-post" onclick="setMethod('POST_INV')">POST<br/>Investigation</button>
+      <button class="mtab" id="tab-resp" onclick="setMethod('POST_RESP')">POST<br/>Response</button>
+      <button class="mtab arp" id="tab-action" onclick="setMethod('POST_ACTION')">POST<br/>Action</button>
+    </div>
+    <div class="mtabs">
+      <button class="mtab" id="tab-get" onclick="setMethod('GET')">GET<br/>By ID</button>
+      <button class="mtab" id="tab-search" onclick="setMethod('SEARCH')">GET<br/>Search</button>
+    </div>
+    <div class="ep" id="ep-display">
+      <span class="mpill pp" id="mp">POST</span><span id="ep-path">/v1/investigation</span>
+    </div>
+
+    <div class="sb-title" style="margin-top:4px">Load Scenario</div>
+    <select id="scen" onchange="loadScenario(this.value)">
+      <option value="">— select a scenario —</option>
+      <optgroup label="POST /investigation (5 types)">
+        <option value="utap_wallet_unmapped">🟡 UTAP — wallet credited, no customer mapped</option>
+        <option value="rqfi_travel_rule">🔵 RQFI — Travel Rule supplement (bank-for-corporate)</option>
+        <option value="rqch_gas_query">🟢 RQCH — gas fee clarification</option>
+        <option value="acct_wallet_status">🟣 ACCT — wallet ownership confirmation</option>
+        <option value="othr_general">⚪ OTHR — generic narrative (block reorg query)</option>
+      </optgroup>
+      <optgroup label="POST /investigation/{id}/response (structured)">
+        <option value="resp_utap_corrected">✅ UTAP — closed, structured corrected_creditor</option>
+        <option value="resp_rqfi_supplement">✅ RQFI — TR data supplemented (corrected_debtor)</option>
+        <option value="resp_rqch_charges">💰 RQCH — gas breakdown with FX + compensation</option>
+        <option value="resp_rejected_legal">🚫 RJCT — legal decision (anti-tipping-off)</option>
+      </optgroup>
+      <optgroup label="POST /investigation/{id}/action">
+        <option value="action_rqst">⏰ Action — RQST RequestInvestigationStatus</option>
+        <option value="action_rqcl">🗑️ Action — RQCL RequestInvestigationClosure</option>
+      </optgroup>
+      <optgroup label="GET">
+        <option value="get_inv">🔍 GET — full investigation with lifecycle</option>
+        <option value="search_open">🔎 SEARCH — open investigations, cursor paginated</option>
+      </optgroup>
+    </select>
+    <div class="si" id="si">Select a scenario above, or fill in the fields manually across the tabs.</div>
+
+    <div class="fsec">Investigation</div>
+    <div class="fg">
+      <div class="fl">Message Identification <span class="ft">camt MsgId</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-msgid" placeholder="MSG-UTAP-20260615-001"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Requestor Investigation ID <span class="ft">RqstrInvstgtnId</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-rqstrid" placeholder="KRK-INV-2026-04231"/>
+    </div>
+    <div class="fg">
+      <div class="fl">EIR (End-to-end Investigation Ref) <span class="ft">UUID</span></div>
+      <input type="text" id="f-eir" placeholder="auto-generated UUID"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Investigation Type <span class="freq">MANDATORY</span></div>
+      <select id="f-type">
+        <option value="UTAP">UTAP — UnableToApplyByCreditor</option>
+        <option value="RQFI">RQFI — RequestForInformation</option>
+        <option value="RQCH">RQCH — RequestRelatedToCharges</option>
+        <option value="ACCT">ACCT — AccountRelatedInvestigation</option>
+        <option value="OTHR">OTHR — Other (catch-all)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Investigation Sub-type <span class="ft">optional code</span></div>
+      <input type="text" id="f-subtype" placeholder="e.g. RQDO"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Reason Code <span class="ft">filtered subset</span></div>
+      <select id="f-reasoncode">
+        <option value="">— none / use proprietary —</option>
+        <option value="NARR">NARR — Narrative</option>
+        <option value="RQDO">RQDO — RequestDocumentation</option>
+        <option value="UTAP">UTAP — UnableToApplyByCreditor</option>
+        <option value="ACCT">ACCT — AccountRelatedInvestigation</option>
+        <option value="RQCH">RQCH — RequestRelatedToCharges</option>
+        <option value="CHIN">CHIN — ChargesInformation</option>
+        <option value="DTOR">DTOR — Debtor</option>
+        <option value="CTOR">CTOR — Creditor</option>
+        <option value="REGR">REGR — RegulatoryReporting</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Proposed Crypto-specific Code <span class="ft">pacs.crypto extension</span></div>
+      <select id="f-reasonprop">
+        <option value="">— none —</option>
+        <option value="TRSU">TRSU — TravelRuleSupplement</option>
+        <option value="WALV">WALV — WalletVerification</option>
+        <option value="ATTR">ATTR — AttestationRequest</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Service Level <span class="ft">expected response time</span></div>
+      <select id="f-sla">
+        <option value="">— none —</option>
+        <option value="R01D">R01D — within 1 business day</option>
+        <option value="R03D">R03D — within 3 business days</option>
+        <option value="R05D">R05D — within 5 business days</option>
+        <option value="R10D">R10D — within 10 business days</option>
+        <option value="R15D">R15D — within 15 business days</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Webhook URL <span class="ft">status push</span></div>
+      <input type="text" id="f-webhook" placeholder="https://requestor.example/pacs-crypto/investigation-status"/>
+    </div>
+
+    <div class="fsec">Amount in Question (optional)</div>
+    <div class="fg">
+      <div class="fl">Value</div>
+      <input type="text" id="f-aiqv" placeholder="12500.000000"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Currency <span class="ft">ISO 4217 / XXX</span></div>
+      <select id="f-aiqc">
+        <option value="">— none —</option>
+        <option>USD</option><option>EUR</option><option>GBP</option>
+        <option>CHF</option><option>SGD</option><option>XXX</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Token DTI <span class="ft">if relevant</span></div>
+      <input type="text" id="f-aiqdti" placeholder="T9B3X8H2K"/>
+    </div>
+
+    <button class="sbtn sp" id="sendbtn" onclick="sendRequest()">Send Request →</button>
+  </div>
+
+  <!-- PARTIES TAB -->
+  <div class="sb-pane" id="tab-parties">
+    <div class="callout">
+      Three party fields on the request side: <code>requestor</code> (institutional party with the API
+      relationship), <code>request_originator</code> (party on whose behalf, where relevant), and
+      <code>expected_responder</code>. On the response side: <code>responder</code> and optional
+      <code>response_originator</code>.
+    </div>
+
+    <div class="fsec">Requestor</div>
+    <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-rqname" placeholder="Kraken Belgium BVBA"/></div>
+    <div class="fg"><div class="fl">LEI <span class="ft">ISO 17442</span></div>
+      <input type="text" id="f-rqlei" placeholder="5299000DUFB71VFOHVB49"/></div>
+    <div class="fg"><div class="fl">Country</div>
+      <input type="text" id="f-rqctry" placeholder="BE"/></div>
+    <div class="fg"><div class="fl">Contact Email</div>
+      <input type="text" id="f-rqemail" placeholder="ops@requestor.example"/></div>
+
+    <div class="fsec">Request Originator (new in v1.3, optional)</div>
+    <div class="fg"><div class="fl">Name</div>
+      <input type="text" id="f-roname" placeholder="Acme Components Ltd"/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-rolei" placeholder="529900XYZ4567ABCD123"/></div>
+    <div class="fg"><div class="fl">Country</div>
+      <input type="text" id="f-roctry" placeholder="HK"/></div>
+    <div class="fg"><div class="fl">Relationship</div>
+      <select id="f-rorel">
+        <option value="">— omit —</option>
+        <option value="CUSTOMER">CUSTOMER</option>
+        <option value="SUBSIDIARY">SUBSIDIARY</option>
+        <option value="BUSINESS_UNIT">BUSINESS_UNIT</option>
+        <option value="WHITE_LABEL_CLIENT">WHITE_LABEL_CLIENT</option>
+        <option value="OTHER">OTHER</option>
+      </select>
+    </div>
+
+    <div class="fsec">Responder</div>
+    <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-rsname" placeholder="Bitvavo B.V."/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-rslei" placeholder="7245007VX57GR4IUVZ79"/></div>
+    <div class="fg"><div class="fl">Country</div>
+      <input type="text" id="f-rsctry" placeholder="NL"/></div>
+
+    <div class="fsec">Expected Responder (new in v1.3, optional)</div>
+    <div class="fg"><div class="fl">Name <span class="ft">if different from responder</span></div>
+      <input type="text" id="f-ername" placeholder=""/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-erlei" placeholder=""/></div>
+
+    <div class="fsec">Response Originator (for POST /response, optional)</div>
+    <div class="fg"><div class="fl">Name <span class="ft">who produced the answer</span></div>
+      <input type="text" id="f-roresname" placeholder="Bitvavo B.V. — Compliance Operations"/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-roreslei" placeholder=""/></div>
+  </div>
+
+  <!-- CONTENT TAB (request narrative + response data record) -->
+  <div class="sb-pane" id="tab-content">
+    <div class="callout">
+      The <strong>request</strong> carries an investigation reason with optional narrative and
+      additional_information. The <strong>response</strong> uses a structured
+      <code>ResponseDataRecord</code> inspired by camt.111 <code>InvestigationDataRecord12Choice</code>,
+      with carriers for narrative, corrected parties, charge details, regulatory information,
+      compensating actions, and document references.
+    </div>
+
+    <div class="fsec">Request — Additional Information</div>
+    <div class="fg">
+      <div class="fl">Additional Information <span class="ft">one line per row</span></div>
+      <textarea id="f-addinfo" rows="4" placeholder="Wallet 0xde0B...697BAe credited 12,500 USDC at block 19234500&#10;No customer mapped to this wallet in our KYC records&#10;Please confirm intended beneficiary"></textarea>
+    </div>
+    <div class="fg">
+      <div class="fl">Narrative <span class="ft">extended free text</span></div>
+      <textarea id="f-narr" rows="3" placeholder=""></textarea>
+    </div>
+
+    <div class="fsec">Response — Status &amp; Confirmation</div>
+    <div class="fg">
+      <div class="fl">New Status</div>
+      <select id="f-respstatus">
+        <option value="CLSD">CLSD — Closed (resolved)</option>
+        <option value="PDNG">PDNG — Pending (partial response)</option>
+        <option value="RJCT">RJCT — Rejected (declines to progress)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Status Reason</div>
+      <select id="f-respreason">
+        <option value="">— none —</option>
+        <option value="CMPI">CMPI — CorrectionMadeAsPerInquiry</option>
+        <option value="INPO">INPO — InProgress</option>
+        <option value="PARE">PARE — PartialResponse</option>
+        <option value="NOAD">NOAD — NoAdditionalInformationAvailable</option>
+        <option value="LEGL">LEGL — LegalDecision (anti-tipping-off)</option>
+        <option value="RR04">RR04 — RegulatoryReason</option>
+        <option value="ARDT">ARDT — AlreadyReturned</option>
+        <option value="CAPR">CAPR — ClosedAsPerRequest</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Execution Confirmation <span class="ft">filtered set</span></div>
+      <select id="f-respconf">
+        <option value="">— none —</option>
+        <option value="INFO">INFO — AdditionalInformationSent</option>
+        <option value="CHRG">CHRG — ChargesDetailsProvided</option>
+        <option value="PURP">PURP — PurposeDetailsProvided</option>
+        <option value="CONF">CONF — ConfirmationOfPayment</option>
+        <option value="NINF">NINF — NoInformationAvailable</option>
+        <option value="PDNG">PDNG — Pending</option>
+      </select>
+    </div>
+
+    <div class="fsec">ResponseDataRecord Carriers</div>
+    <div class="fg">
+      <div class="fl">Response Narrative</div>
+      <textarea id="f-respnarr" rows="3" placeholder="Beneficiary confirmed from our records..."></textarea>
+    </div>
+    <div class="fg">
+      <div class="fl">Corrected Creditor — Name</div>
+      <input type="text" id="f-corccrname" placeholder="Bravo Supplies B.V."/></div>
+    <div class="fg">
+      <div class="fl">Corrected Creditor — LEI</div>
+      <input type="text" id="f-corccrlei" placeholder="724500QHKL6MVSQQ1Z17"/></div>
+    <div class="fg">
+      <div class="fl">Corrected Debtor — Name</div>
+      <input type="text" id="f-cordbtname" placeholder=""/></div>
+    <div class="fg">
+      <div class="fl">Corrected Debtor — LEI</div>
+      <input type="text" id="f-cordbtlei" placeholder=""/></div>
+
+    <div class="fsec">Charge Details (for RQCH responses)</div>
+    <div class="fg"><div class="fl">Gas Units Used</div>
+      <input type="text" id="f-cdgas" placeholder="21000"/></div>
+    <div class="fg"><div class="fl">Gas Price (gwei)</div>
+      <input type="text" id="f-cdprice" placeholder="37.14"/></div>
+    <div class="fg"><div class="fl">Total Chain-Native Cost</div>
+      <input type="text" id="f-cdnative" placeholder="0.000780 ETH"/></div>
+    <div class="fg"><div class="fl">Fiat Equivalent</div>
+      <input type="text" id="f-cdfiat" placeholder="2.34 USD"/></div>
+    <div class="fg"><div class="fl">Explanation</div>
+      <textarea id="f-cdexpl" rows="2" placeholder="Base fee 32 gwei, priority fee 5 gwei…"></textarea></div>
+
+    <div class="fsec">Compensation (optional)</div>
+    <div class="fg"><div class="fl">Value</div>
+      <input type="text" id="f-compv" placeholder="0.00018"/></div>
+    <div class="fg"><div class="fl">Currency / Token DTI</div>
+      <input type="text" id="f-compc" placeholder="XXX / X9J9XDMTD"/></div>
+    <div class="fg"><div class="fl">Compensating Instruction ID</div>
+      <input type="text" id="f-compinstr" placeholder="UUID of new pacs.crypto Instruction"/></div>
+  </div>
+
+  <!-- REFERENCES TAB -->
+  <div class="sb-pane" id="tab-refs">
+    <div class="callout">
+      Investigation must reference at least one underlying business event via
+      <code>instruction</code>, <code>travel_rule</code>, or <code>reporting</code>.
+      Multiple references are permitted when the investigation spans more than one record.
+    </div>
+
+    <div class="fsec">Action Submission (for POST /action)</div>
+    <div class="fg">
+      <div class="fl">Action Code</div>
+      <select id="f-actcode">
+        <option value="RQST">RQST — RequestInvestigationStatus</option>
+        <option value="RQCL">RQCL — RequestInvestigationClosure</option>
+        <option value="RQOB">RQOB — RequestObjection</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Action Reason</div>
+      <select id="f-actreason">
+        <option value="">— none —</option>
+        <option value="IRSI">IRSI — InvestigationRequestSentInError</option>
+        <option value="IRRR">IRRR — InvestigationRequestResolved</option>
+        <option value="IRCD">IRCD — CompensationDisputed</option>
+        <option value="IRIC">IRIC — ResponseIncomplete</option>
+        <option value="NARR">NARR — Narrative</option>
+      </select>
+    </div>
+
+    <div class="fsec">Reference: Instruction</div>
+    <div class="fg"><div class="fl">Instruction ID</div>
+      <input type="text" id="f-refinstrid" placeholder="UUID of pacs.crypto Instruction"/></div>
+    <div class="fg"><div class="fl">UETR</div>
+      <input type="text" id="f-refuetr" placeholder="UUID"/></div>
+    <div class="fg"><div class="fl">End-to-End ID</div>
+      <input type="text" id="f-refe2e" placeholder="E2E-XXXX-001"/></div>
+
+    <div class="fsec">Reference: Travel Rule</div>
+    <div class="fg"><div class="fl">Record ID</div>
+      <input type="text" id="f-reftrid" placeholder="UUID of Travel Rule record"/></div>
+
+    <div class="fsec">Reference: Account Reporting</div>
+    <div class="fg"><div class="fl">Report ID</div>
+      <input type="text" id="f-refreportid" placeholder="UUID"/></div>
+    <div class="fg"><div class="fl">Transaction Hash</div>
+      <input type="text" id="f-reftxhash" placeholder="0xabcdef..."/></div>
+
+    <div class="fsec">Search Filters (for GET /search)</div>
+    <div class="fg"><div class="fl">Status</div>
+      <select id="f-searchstatus">
+        <option value="">all</option>
+        <option value="PDNG">PDNG — Pending</option>
+        <option value="CLSD">CLSD — Closed</option>
+        <option value="RJCT">RJCT — Rejected</option>
+      </select></div>
+    <div class="fg"><div class="fl">Type</div>
+      <select id="f-searchtype">
+        <option value="">all</option>
+        <option value="UTAP">UTAP</option>
+        <option value="RQFI">RQFI</option>
+        <option value="RQCH">RQCH</option>
+        <option value="ACCT">ACCT</option>
+        <option value="OTHR">OTHR</option>
+      </select></div>
+    <div class="fg"><div class="fl">From Date</div>
+      <input type="text" id="f-searchfrom" placeholder="2026-06-15T00:00:00Z"/></div>
+    <div class="fg"><div class="fl">Counterparty LEI</div>
+      <input type="text" id="f-searchcp" placeholder="LEI"/></div>
+  </div>
+
+</aside>
+
+<!-- ═══ REQUEST PANEL ═══ -->
+<div class="panel">
+  <div class="ph">
+    <span class="pt">Request Body</span>
+    <span class="pm" id="req-meta">—</span>
+  </div>
+  <div class="jv" id="req-json">
+    <div class="empty">
+      <div class="ei">📋</div>
+      <div class="et">Select a scenario or fill in the fields</div>
+      <div class="es">The request body will appear here. Choose an operation from the method tabs and load a scenario.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESPONSE PANEL ═══ -->
+<div class="rp">
+  <div class="rh" id="rh">
+    <span class="rt">Response will appear after sending</span>
+  </div>
+  <div class="rb" id="rbody">
+    <div class="empty">
+      <div class="ei">🔍</div>
+      <div class="et">Ready to investigate</div>
+      <div class="es">Select a scenario and click the send button to see the simulated response.</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end .app -->
+
+<script>
+'use strict';
+
+let method = 'POST_INV';
+const g = id => document.getElementById(id)?.value || '';
+const s = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+
+// Shared state for chained flows
+const simState = {
+  investigationId: 'inv-aabb1122-3344-5566-7788-99aabbccddee',
+  lastEir: '550e8400-e29b-41d4-a716-446655440099',
+  lastRespId: 'BTV-RSP-2026-00992'
+};
+
+// ── TAB SWITCHING ────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const tabs = ['config','parties','content','refs'];
+  document.querySelectorAll('.sb-tab').forEach((b,i) => {
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.sb-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+}
+
+// ── METHOD SWITCHING ─────────────────────────────────────────────────────────
+function setMethod(m) {
+  method = m;
+  const map = {
+    POST_INV:    { btn:'tab-post',    cls:'ap',  pill:'pp',  word:'POST',   path:'/v1/investigation', desc:'Create new investigation' },
+    POST_RESP:   { btn:'tab-resp',    cls:'ag',  pill:'gp',  word:'POST',   path:'/v1/investigation/{id}/response', desc:'Submit response to open investigation' },
+    POST_ACTION: { btn:'tab-action',  cls:'arp', pill:'pup', word:'POST',   path:'/v1/investigation/{id}/action', desc:'Submit follow-up action' },
+    GET:         { btn:'tab-get',     cls:'ag',  pill:'gp',  word:'GET',    path:'/v1/investigation/{id}', desc:'Retrieve investigation with lifecycle' },
+    SEARCH:      { btn:'tab-search',  cls:'ag',  pill:'gp',  word:'GET',    path:'/v1/investigation/search', desc:'Search investigations with cursor pagination' }
+  };
+  Object.entries(map).forEach(([k, cfg]) => {
+    const btn = document.getElementById(cfg.btn);
+    if (!btn) return;
+    btn.className = 'mtab' + (m === k ? ' ' + cfg.cls : '');
+  });
+  const cfg = map[m];
+  const mp = document.getElementById('mp');
+  const ep = document.getElementById('ep-path');
+  if (mp) { mp.textContent = cfg.word; mp.className = 'mpill ' + cfg.pill; }
+  if (ep) ep.textContent = cfg.path;
+  document.getElementById('si').innerHTML = `<strong>${cfg.word}</strong> ${cfg.desc}`;
+  updatePreview();
+}
+
+// ── SCENARIOS ────────────────────────────────────────────────────────────────
+const SCENARIOS = {
+
+  utap_wallet_unmapped: {
+    method: 'POST_INV',
+    info: '<strong>UTAP — wallet credited, no customer mapped</strong><br/>Kraken Belgium received 12,500 USDC at a wallet under its control but cannot map the wallet to any customer in its KYC records. Asks Bitvavo (originating VASP) to confirm intended beneficiary.',
+    f: {
+      msgid:'MSG-UTAP-20260615-001', rqstrid:'KRK-INV-2026-04231',
+      eir:'550e8400-e29b-41d4-a716-446655440099',
+      type:'UTAP', subtype:'', reasoncode:'', reasonprop:'WALV',
+      sla:'R03D', webhook:'https://kraken-be.example.com/pacs-crypto/investigation-status',
+      aiqv:'12500.000000', aiqc:'USD', aiqdti:'T9B3X8H2K',
+      addinfo:'Wallet 0xde0B...697BAe credited 12,500 USDC at block 19234500\nNo customer mapped to this wallet in our KYC records\nPlease confirm intended beneficiary and verify destination wallet',
+      narr:''
+    },
+    parties: {
+      rqname:'Kraken Belgium BVBA', rqlei:'5299000DUFB71VFOHVB49', rqctry:'BE', rqemail:'ops@kraken-be.example.com',
+      roname:'', rolei:'', roctry:'', rorel:'',
+      rsname:'Bitvavo B.V.', rslei:'7245007VX57GR4IUVZ79', rsctry:'NL',
+      ername:'', erlei:'',
+      roresname:'', roreslei:''
+    },
+    refs: {
+      refinstrid:'550e8400-e29b-41d4-a716-446655440099',
+      refuetr:'550e8400-e29b-41d4-a716-446655440099',
+      refe2e:'',
+      reftrid:'',
+      refreportid:'',
+      reftxhash:'0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321'
+    }
+  },
+
+  rqfi_travel_rule: {
+    method: 'POST_INV',
+    info: '<strong>RQFI — Travel Rule supplement (bank-for-corporate)</strong><br/>Coinbase Asia raises a Travel Rule supplementation request on behalf of its corporate customer Acme Components Ltd. Originator postal address missing — required under EU TFR Article 4(1)(b). The v1.3 <code>request_originator</code> field carries the underlying corporate identity.',
+    f: {
+      msgid:'MSG-RQFI-20260615-002', rqstrid:'CB-INV-2026-00789',
+      eir:'660f9511-f3ac-52e5-b827-557766551133',
+      type:'RQFI', subtype:'', reasoncode:'', reasonprop:'TRSU',
+      sla:'R01D', webhook:'https://coinbase-asia.example.com/pacs-crypto/investigation-status',
+      aiqv:'', aiqc:'', aiqdti:'',
+      addinfo:'Originator postal address missing on Travel Rule record\nRequired under EU TFR Article 4(1)(b) for cross-border transfer',
+      narr:''
+    },
+    parties: {
+      rqname:'Coinbase Asia Pte Ltd', rqlei:'5493007A8B7BG3DJK1E32', rqctry:'SG', rqemail:'',
+      roname:'Acme Components Ltd', rolei:'529900XYZ4567ABCD123', roctry:'HK', rorel:'CUSTOMER',
+      rsname:'Bitvavo B.V.', rslei:'7245007VX57GR4IUVZ79', rsctry:'NL',
+      ername:'', erlei:'',
+      roresname:'', roreslei:''
+    },
+    refs: { refinstrid:'', refuetr:'', refe2e:'', reftrid:'660f9511-f3ac-52e5-b827-557766551133', refreportid:'', reftxhash:'' }
+  },
+
+  rqch_gas_query: {
+    method: 'POST_INV',
+    info: '<strong>RQCH — gas fee clarification</strong><br/>Example Bank AG\'s reconciliation team queries why actual gas was 0.00078 ETH while the quote indicated 0.00042 ETH. Amount in question uses <code>currency: XXX</code> with token DTI per the family non-pegged-token convention.',
+    f: {
+      msgid:'MSG-RQCH-20260616-003', rqstrid:'EXBNK-INV-2026-00231',
+      eir:'770e8400-e29b-41d4-a716-446655441234',
+      type:'RQCH', subtype:'', reasoncode:'CHIN', reasonprop:'',
+      sla:'R05D', webhook:'',
+      aiqv:'0.00036', aiqc:'XXX', aiqdti:'X9J9XDMTD',
+      addinfo:'Quote indicated 21,000 gas at 20 gwei = 0.00042 ETH\nActual gas billed 0.00078 ETH per status response\nPlease clarify the difference',
+      narr:''
+    },
+    parties: {
+      rqname:'Example Bank AG', rqlei:'529900PQR4567STU90123', rqctry:'DE', rqemail:'',
+      roname:'', rolei:'', roctry:'', rorel:'',
+      rsname:'Bitvavo B.V.', rslei:'7245007VX57GR4IUVZ79', rsctry:'NL',
+      ername:'', erlei:'',
+      roresname:'', roreslei:''
+    },
+    refs: { refinstrid:'880f9511-f3ac-52e5-b827-557766551155', refuetr:'', refe2e:'', reftrid:'', refreportid:'', reftxhash:'' }
+  },
+
+  acct_wallet_status: {
+    method: 'POST_INV',
+    info: '<strong>ACCT — wallet ownership confirmation</strong><br/>Global Industries Plc settled a payment to a counterparty wallet last month and needs the counterparty\'s VASP to confirm the wallet was, and remains, controlled by the named beneficiary. For audit trails.',
+    f: {
+      msgid:'MSG-ACCT-20260620-004', rqstrid:'GI-INV-2026-00891',
+      eir:'880f9511-f3ac-52e5-b827-557766552244',
+      type:'ACCT', subtype:'', reasoncode:'ACCT', reasonprop:'',
+      sla:'R10D', webhook:'',
+      aiqv:'', aiqc:'', aiqdti:'',
+      addinfo:'Confirm wallet 0xde0B...697BAe was/is controlled by Bravo Supplies B.V.\nAudit trail for FY2026 financial statements',
+      narr:''
+    },
+    parties: {
+      rqname:'Global Industries Plc', rqlei:'213800ABC123DEF45678', rqctry:'GB', rqemail:'',
+      roname:'', rolei:'', roctry:'', rorel:'',
+      rsname:'Kraken Belgium BVBA', rslei:'5299000DUFB71VFOHVB49', rsctry:'BE',
+      ername:'', erlei:'',
+      roresname:'', roreslei:''
+    },
+    refs: { refinstrid:'', refuetr:'', refe2e:'', reftrid:'', refreportid:'', reftxhash:'0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321' }
+  },
+
+  othr_general: {
+    method: 'POST_INV',
+    info: '<strong>OTHR — generic narrative (block reorg)</strong><br/>A bilateral question that does not fit the structured types. A VASP asks a counterparty to clarify a block-level audit query about a chain reorganisation observed differently across the parties\' records.',
+    f: {
+      msgid:'MSG-OTHR-20260622-005', rqstrid:'BTV-INV-2026-00992',
+      eir:'990aa622-1234-5678-90ab-cdef99887766',
+      type:'OTHR', subtype:'RQDO', reasoncode:'NARR', reasonprop:'',
+      sla:'R05D', webhook:'',
+      aiqv:'', aiqc:'', aiqdti:'',
+      addinfo:'',
+      narr:'Block 19234500 included our settled transaction but the block was subsequently reorganised at depth 3 in your records and not in ours. Please share your archived block snapshot and any operator notes from the reorganisation event.'
+    },
+    parties: {
+      rqname:'Bitvavo B.V.', rqlei:'7245007VX57GR4IUVZ79', rqctry:'NL', rqemail:'',
+      roname:'', rolei:'', roctry:'', rorel:'',
+      rsname:'Kraken Belgium BVBA', rslei:'5299000DUFB71VFOHVB49', rsctry:'BE',
+      ername:'', erlei:'',
+      roresname:'', roreslei:''
+    },
+    refs: { refinstrid:'', refuetr:'', refe2e:'', reftrid:'', refreportid:'', reftxhash:'0x1122334455667788aabbccddeeff00112233445566778899aabbccddeeff0011' }
+  },
+
+  resp_utap_corrected: {
+    method: 'POST_RESP',
+    info: '<strong>UTAP closed with structured corrected_creditor</strong><br/>Bitvavo responds to the UTAP from Kraken Belgium. Uses the new structured <code>ResponseDataRecord</code>: <code>corrected_creditor</code> supplies the beneficiary identity, narrative gives the context, document_reference points at the KYC certificate.',
+    f: { respstatus:'CLSD', respreason:'CMPI', respconf:'INFO',
+         respnarr:"Beneficiary confirmed from our records. Wallet was correctly populated by the original instruction; the receiver's customer mapping appears incomplete on their side. KYC certificate available on bilateral request." },
+    parties: { roresname:'Bitvavo B.V. — Compliance Operations', roreslei:'7245007VX57GR4IUVZ79' },
+    content: { corccrname:'Bravo Supplies B.V.', corccrlei:'724500QHKL6MVSQQ1Z17', cordbtname:'', cordbtlei:'' }
+  },
+
+  resp_rqfi_supplement: {
+    method: 'POST_RESP',
+    info: '<strong>RQFI supplemented with corrected_debtor + regulatory_information</strong><br/>Bitvavo provides the missing originator postal address through the structured <code>corrected_debtor</code> carrier. The Travel Rule record will be re-issued separately under the same record_id.',
+    f: { respstatus:'CLSD', respreason:'CMPI', respconf:'INFO',
+         respnarr:"Originator postal address supplemented per request. Updated Travel Rule record will follow under the same record_id with correction_of_callback_ref pointing at this investigation." },
+    parties: { roresname:'Bitvavo B.V.', roreslei:'7245007VX57GR4IUVZ79' },
+    content: { corccrname:'', corccrlei:'', cordbtname:'TechFlow Singapore Pte Ltd', cordbtlei:'9598005H8H0HE9JJZB55',
+               regauth:'EU', regref:'EU TFR Article 4(1)(b)', regdet:'Postal address now provided as required by EU Transfer of Funds Regulation.' }
+  },
+
+  resp_rqch_charges: {
+    method: 'POST_RESP',
+    info: '<strong>RQCH closed with structured charge_details + compensation</strong><br/>Bitvavo returns the full structured gas breakdown: chain-native gas units, gas price, total native cost, and fiat equivalent with FX source. Goodwill compensation of 0.00018 ETH offered, referencing a new pacs.crypto Instruction.',
+    f: { respstatus:'CLSD', respreason:'CMPI', respconf:'CHRG',
+         respnarr:"Actual gas higher than quoted due to mempool congestion at broadcast time (priority fee escalation). Goodwill compensation of 0.00018 ETH offered." },
+    parties: { roresname:'Bitvavo B.V. — Treasury Operations', roreslei:'7245007VX57GR4IUVZ79' },
+    content: { cdgas:'21000', cdprice:'37.14', cdnative:'0.000780 ETH', cdfiat:'2.34 USD',
+               cdexpl:'Base fee 32 gwei (network congestion at slot), priority fee 5 gwei, total effective 37.14 gwei. Quote indicated 20 gwei based on 5-min average at quote time.',
+               compv:'0.00018', compc:'XXX / X9J9XDMTD', compinstr:'990f9511-f3ac-52e5-b827-557766551177' }
+  },
+
+  resp_rejected_legal: {
+    method: 'POST_RESP',
+    info: '<strong>RJCT — legal decision (anti-tipping-off)</strong><br/>Responder declines to progress an investigation citing <code>LEGL</code> LegalDecision. The narrative is deliberately uninformative — this is the anti-tipping-off compliant path. The asymmetry matters: <code>LEGL</code>/<code>RR04</code> are used by the responder declining to disclose, not by the requestor accusing the counterparty.',
+    f: { respstatus:'RJCT', respreason:'LEGL', respconf:'',
+         respnarr:"Unable to progress this investigation under current circumstances." },
+    parties: { roresname:'', roreslei:'' },
+    content: {}
+  },
+
+  action_rqst: {
+    method: 'POST_ACTION',
+    info: '<strong>Action — RQST RequestInvestigationStatus</strong><br/>The requestor asks for a status update on a slow-moving investigation. When the responder has not responded within the agreed service level, <code>RQST</code> elicits progress.',
+    f: { actcode:'RQST', actreason:'IRIC',
+         addinfo:'No response received within R03D service level\nPlease provide status or substantive response' }
+  },
+
+  action_rqcl: {
+    method: 'POST_ACTION',
+    info: '<strong>Action — RQCL RequestInvestigationClosure</strong><br/>The requestor asks the responder to close an investigation that was resolved out of band. <code>RQCL</code> is a request, not a unilateral close — the responder evaluates and acknowledges or continues.',
+    f: { actcode:'RQCL', actreason:'IRRR',
+         addinfo:'Issue resolved out of band — beneficiary confirmed via direct contact\nNo further action required' }
+  },
+
+  get_inv: {
+    method: 'GET',
+    info: '<strong>GET — investigation with full lifecycle</strong><br/>Retrieves the original request, current status, and the lifecycle history. For long-running investigations, the <code>?lifecycle_limit=N</code> parameter caps the entries returned (most recent first).',
+    f: { invid:'inv-aabb1122-3344-5566-7788-99aabbccddee', lifecyclelimit:'' }
+  },
+
+  search_open: {
+    method: 'SEARCH',
+    info: '<strong>SEARCH — open investigations, cursor paginated</strong><br/>Operations dashboard query. Returns up to 50 results per page plus a <code>next_cursor</code> for the next page. Cursors valid for 24 hours.',
+    f: { searchstatus:'PDNG', searchtype:'', searchfrom:'2026-06-15T00:00:00Z', searchcp:'' }
+  }
+};
+
+// ── LOAD SCENARIO ────────────────────────────────────────────────────────────
+function loadScenario(key) {
+  if (!key) { return; }
+  const sc = SCENARIOS[key];
+  if (!sc) return;
+  setMethod(sc.method);
+  if (sc.f) Object.entries(sc.f).forEach(([k,v]) => s('f-' + k, v));
+  if (sc.parties) Object.entries(sc.parties).forEach(([k,v]) => s('f-' + k, v));
+  if (sc.refs) Object.entries(sc.refs).forEach(([k,v]) => s('f-' + k, v));
+  if (sc.content) Object.entries(sc.content).forEach(([k,v]) => s('f-' + k, v));
+  document.getElementById('si').innerHTML = sc.info;
+  updatePreview();
+}
+
+// ── BUILD REQUEST ────────────────────────────────────────────────────────────
+function buildReq() {
+  if (method === 'GET') {
+    return { _type: 'GET', invid: g('f-invid') || simState.investigationId,
+             lifecycle_limit: g('f-lifecyclelimit') || undefined };
+  }
+  if (method === 'SEARCH') {
+    return { _type: 'SEARCH',
+             status: g('f-searchstatus') || undefined,
+             type: g('f-searchtype') || undefined,
+             from: g('f-searchfrom') || undefined,
+             counterparty_lei: g('f-searchcp') || undefined,
+             page_size: 50 };
+  }
+  if (method === 'POST_ACTION') {
+    return {
+      _type: 'POST_ACTION',
+      _path: '/v1/investigation/' + simState.investigationId + '/action',
+      message_identification: 'ACT-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-001',
+      action: g('f-actcode'),
+      action_reason: g('f-actreason') || undefined,
+      additional_information: g('f-addinfo') ? g('f-addinfo').split('\n').filter(Boolean) : undefined
+    };
+  }
+  if (method === 'POST_RESP') {
+    const respDataRec = {};
+    if (g('f-respnarr')) respDataRec.narrative = g('f-respnarr');
+    if (g('f-corccrname')) {
+      respDataRec.corrected_creditor = {
+        name: g('f-corccrname'),
+        lei: g('f-corccrlei') || undefined
+      };
+    }
+    if (g('f-cordbtname')) {
+      respDataRec.corrected_debtor = {
+        name: g('f-cordbtname'),
+        lei: g('f-cordbtlei') || undefined
+      };
+    }
+    if (g('f-cdgas') || g('f-cdprice') || g('f-cdnative')) {
+      respDataRec.charge_details = {
+        gas_units_used: g('f-cdgas') ? parseInt(g('f-cdgas')) : undefined,
+        gas_price: g('f-cdprice') || undefined,
+        gas_price_unit: g('f-cdprice') ? 'gwei' : undefined,
+        total_chain_native_cost: g('f-cdnative') ? parseAmount(g('f-cdnative')) : undefined,
+        fiat_equivalent_cost: g('f-cdfiat') ? parseFiat(g('f-cdfiat')) : undefined,
+        explanation: g('f-cdexpl') || undefined
+      };
+    }
+    if (g('f-cordbtname') && g('f-respreason') === 'CMPI' && g('f-respconf') === 'INFO') {
+      // for the rqfi_supplement scenario, attach regulatory_information if present in sc.content
+      const reg = SCENARIOS.resp_rqfi_supplement?.content;
+      if (reg && (reg.regauth || reg.regref)) {
+        respDataRec.regulatory_information = {
+          authority_country: reg.regauth || undefined,
+          regulation_reference: reg.regref || undefined,
+          details: reg.regdet || undefined
+        };
+      }
+    }
+    const body = {
+      _type: 'POST_RESP',
+      _path: '/v1/investigation/' + simState.investigationId + '/response',
+      message_identification: 'RSP-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-001',
+      responder_investigation_identification: simState.lastRespId,
+      response_originator: g('f-roresname') ? {
+        name: g('f-roresname'),
+        lei: g('f-roreslei') || undefined
+      } : undefined,
+      status: g('f-respstatus'),
+      status_reason: g('f-respreason') || undefined,
+      execution_confirmation: g('f-respconf') || undefined,
+      response_data: Object.keys(respDataRec).length ? respDataRec : undefined
+    };
+    if (g('f-compv')) {
+      const [ccy, dti] = (g('f-compc') || '').split('/').map(x => (x||'').trim());
+      body.compensation = {
+        value: g('f-compv'),
+        currency: ccy || undefined,
+        token_dti: dti || undefined,
+        instruction_reference: g('f-compinstr') || undefined
+      };
+    }
+    return body;
+  }
+  // POST_INV
+  const refs = {};
+  if (g('f-refinstrid')) {
+    refs.instruction = {
+      instruction_id: g('f-refinstrid'),
+      uetr: g('f-refuetr') || undefined,
+      end_to_end_identification: g('f-refe2e') || undefined
+    };
+  }
+  if (g('f-reftrid')) refs.travel_rule = { record_id: g('f-reftrid') };
+  if (g('f-reftxhash') || g('f-refreportid')) {
+    refs.reporting = {
+      report_id: g('f-refreportid') || undefined,
+      transaction_hash: g('f-reftxhash') || undefined
+    };
+  }
+  const reason = {};
+  if (g('f-reasoncode')) reason.code = g('f-reasoncode');
+  if (g('f-reasonprop')) reason.proprietary = g('f-reasonprop');
+  if (g('f-addinfo')) reason.additional_information = g('f-addinfo').split('\n').filter(Boolean);
+  if (g('f-narr')) reason.narrative = g('f-narr');
+
+  return {
+    _type: 'POST_INV',
+    _path: '/v1/investigation',
+    message_identification: g('f-msgid') || 'MSG-' + Date.now(),
+    requestor_investigation_identification: g('f-rqstrid') || 'REQ-' + Date.now(),
+    eir: g('f-eir') || undefined,
+    investigation_type: g('f-type'),
+    investigation_sub_type: g('f-subtype') || undefined,
+    investigation_reason: Object.keys(reason).length ? reason : undefined,
+    references: Object.keys(refs).length ? refs : undefined,
+    requestor: {
+      name: g('f-rqname') || 'Requestor',
+      lei: g('f-rqlei') || undefined,
+      country: g('f-rqctry') || undefined,
+      contact: g('f-rqemail') ? { email: g('f-rqemail') } : undefined
+    },
+    request_originator: g('f-roname') ? {
+      name: g('f-roname'),
+      lei: g('f-rolei') || undefined,
+      country: g('f-roctry') || undefined
+    } : undefined,
+    request_originator_relationship: g('f-rorel') || undefined,
+    responder: {
+      name: g('f-rsname') || 'Responder',
+      lei: g('f-rslei') || undefined,
+      country: g('f-rsctry') || undefined
+    },
+    expected_responder: g('f-ername') ? {
+      name: g('f-ername'),
+      lei: g('f-erlei') || undefined
+    } : undefined,
+    investigation_service_level: g('f-sla') || undefined,
+    amount_in_question: g('f-aiqv') ? {
+      value: g('f-aiqv'),
+      currency: g('f-aiqc') || undefined,
+      token_dti: g('f-aiqdti') || undefined
+    } : undefined,
+    webhook_url: g('f-webhook') || undefined
+  };
+}
+
+function parseAmount(s) {
+  const parts = s.trim().split(/\s+/);
+  return { value: parts[0], token_dti: parts[1] === 'ETH' ? 'X9J9XDMTD' : (parts[1] || undefined) };
+}
+function parseFiat(s) {
+  const parts = s.trim().split(/\s+/);
+  return {
+    value: parts[0],
+    currency: parts[1] || 'USD',
+    rate_source: 'Coinbase Spot',
+    rate_timestamp: new Date().toISOString()
+  };
+}
+
+// ── JSON RENDER ──────────────────────────────────────────────────────────────
+function renderJSON(obj) {
+  const clean = JSON.parse(JSON.stringify(obj, (k,v) => k.startsWith('_') ? undefined : v));
+  const s = JSON.stringify(clean, null, 2);
+  return s.replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+    let cls = 'j-num';
+    if (/^"/.test(m)) cls = /:$/.test(m) ? 'j-key' : 'j-str';
+    else if (/true|false/.test(m)) cls = 'j-bool';
+    else if (/null/.test(m)) cls = 'j-null';
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+function updatePreview() {
+  const req = buildReq();
+  const path = req._path || (method === 'GET' ? '/v1/investigation/' + (req.invid || '{id}') :
+                              method === 'SEARCH' ? '/v1/investigation/search' : '/v1/investigation');
+  const m = method === 'GET' || method === 'SEARCH' ? 'GET' : 'POST';
+  document.getElementById('req-meta').textContent = m + ' ' + path;
+  if (method === 'GET' || method === 'SEARCH') {
+    const q = Object.entries(req).filter(([k,v]) => !k.startsWith('_') && k !== 'invid' && v !== undefined && v !== '').map(([k,v]) => `${k}=${v}`).join('&');
+    document.getElementById('req-json').innerHTML = `<pre>${m} ${path}${q ? '?' + q : ''}\n\n<span class="j-null">(no body for ${m})</span></pre>`;
+  } else {
+    document.getElementById('req-json').innerHTML = `<pre>${renderJSON(req)}</pre>`;
+  }
+}
+
+// ── SEND REQUEST ─────────────────────────────────────────────────────────────
+function sendRequest() {
+  updatePreview();
+  const req = buildReq();
+  document.getElementById('rh').innerHTML = `<div class="ldots"><span></span><span></span><span></span></div>`;
+  document.getElementById('rbody').innerHTML = `<div class="empty"><div class="ldots"><span></span><span></span><span></span></div><div class="et">Processing…</div></div>`;
+  setTimeout(() => renderResponse(req), 600 + Math.random() * 400);
+}
+
+// ── RENDER RESPONSE ──────────────────────────────────────────────────────────
+function renderResponse(req) {
+  const elapsed = Math.floor(80 + Math.random() * 220);
+  const { _type } = req;
+
+  if (_type === 'POST_INV') {
+    const newId = 'inv-' + Math.random().toString(16).slice(2,10) + '-' + Math.random().toString(16).slice(2,14);
+    simState.investigationId = newId;
+    simState.lastEir = req.eir || newId;
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s201">201 Created</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/investigation</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card">
+      <div class="ch"><span>🔍</span><span class="ct">Investigation Created</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">investigation_id</div><div class="dv hi">${newId}</div></div>
+        <div class="dr"><div class="dk">eir</div><div class="dv">${req.eir || newId}</div></div>
+        <div class="dr"><div class="dk">status</div><div class="dv"><span class="status-pill st-pending">PDNG — Pending</span></div></div>
+        <div class="dr"><div class="dk">type</div><div class="dv hi">${req.investigation_type}</div></div>
+        <div class="dr"><div class="dk">accepted_at</div><div class="dv">${new Date().toISOString()}</div></div>
+        <div class="dr"><div class="dk">expected_response_by</div><div class="dv ok">${slaToDate(req.investigation_service_level)}</div></div>
+      </div>
+    </div>
+    <div class="pgrid">
+      <div class="pbox">
+        <div class="prole">Requestor</div>
+        <div class="pname">${req.requestor?.name || '—'}</div>
+        <div class="pdet">${req.requestor?.lei || ''} · ${req.requestor?.country || ''}</div>
+      </div>
+      <div class="pbox">
+        <div class="prole">Responder</div>
+        <div class="pname">${req.responder?.name || '—'}</div>
+        <div class="pdet">${req.responder?.lei || ''} · ${req.responder?.country || ''}</div>
+      </div>
+    </div>
+    ${req.request_originator ? `
+    <div class="card callout-amber" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;line-height:1.6">
+        <strong style="color:var(--amber)">Request originator (v1.3):</strong>
+        ${req.request_originator.name} (<code style="font-family:var(--mono);font-size:10px;color:var(--cyan)">${req.request_originator_relationship}</code>)
+        — the requestor is acting on behalf of this underlying party. Subject to anti-tipping-off discipline.
+      </div>
+    </div>` : ''}
+    <div class="card callout-green" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        Next step: switch to <strong style="color:var(--green)">POST Response</strong> in the method tabs to submit a response,
+        or use <strong style="color:var(--blue)">GET By ID</strong> to retrieve the lifecycle later.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  if (_type === 'POST_RESP') {
+    const statusCls = req.status === 'CLSD' ? 'st-final' : (req.status === 'RJCT' ? 'st-failed' : 'st-pending');
+    const statusLbl = req.status === 'CLSD' ? 'CLSD — Closed' : (req.status === 'RJCT' ? 'RJCT — Rejected' : 'PDNG — Pending');
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s201">201 Created</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/investigation/{id}/response</span>
+       <span class="rt">${elapsed}ms</span>`;
+    let cards = `
+    <div class="card">
+      <div class="ch"><span>✉</span><span class="ct">Response Recorded</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">investigation_id</div><div class="dv hi">${simState.investigationId}</div></div>
+        <div class="dr"><div class="dk">new_status</div><div class="dv"><span class="status-pill ${statusCls}">${statusLbl}</span></div></div>
+        ${req.status_reason ? `<div class="dr"><div class="dk">status_reason</div><div class="dv ${req.status === 'RJCT' ? 'er' : 'ok'}">${req.status_reason}</div></div>` : ''}
+        ${req.execution_confirmation ? `<div class="dr"><div class="dk">execution_confirmation</div><div class="dv">${req.execution_confirmation}</div></div>` : ''}
+        <div class="dr"><div class="dk">recorded_at</div><div class="dv">${new Date().toISOString()}</div></div>
+      </div>
+    </div>`;
+    if (req.response_originator) {
+      cards += `
+    <div class="card">
+      <div class="ch"><span>👤</span><span class="ct">Response Originator</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">name</div><div class="dv">${req.response_originator.name}</div></div>
+        ${req.response_originator.lei ? `<div class="dr"><div class="dk">lei</div><div class="dv">${req.response_originator.lei}</div></div>` : ''}
+      </div>
+    </div>`;
+    }
+    if (req.response_data) {
+      const rd = req.response_data;
+      cards += `<div class="card">
+        <div class="ch"><span>📦</span><span class="ct">ResponseDataRecord (camt.111-inspired)</span></div>
+        <div class="cb">`;
+      if (rd.narrative) cards += `<div class="dr"><div class="dk">narrative</div><div class="dv">${rd.narrative}</div></div>`;
+      if (rd.corrected_creditor) cards += `<div class="dr"><div class="dk">corrected_creditor</div>
+        <div class="dv"><strong>${rd.corrected_creditor.name}</strong>${rd.corrected_creditor.lei ? '<br/><span style="color:var(--muted);font-size:10px">LEI ' + rd.corrected_creditor.lei + '</span>' : ''}</div></div>`;
+      if (rd.corrected_debtor) cards += `<div class="dr"><div class="dk">corrected_debtor</div>
+        <div class="dv"><strong>${rd.corrected_debtor.name}</strong>${rd.corrected_debtor.lei ? '<br/><span style="color:var(--muted);font-size:10px">LEI ' + rd.corrected_debtor.lei + '</span>' : ''}</div></div>`;
+      if (rd.regulatory_information) cards += `<div class="dr"><div class="dk">regulatory_information</div>
+        <div class="dv"><strong>${rd.regulatory_information.authority_country || ''}</strong> · ${rd.regulatory_information.regulation_reference || ''}<br/>
+        <span style="color:var(--muted);font-size:10px">${rd.regulatory_information.details || ''}</span></div></div>`;
+      cards += `</div></div>`;
+      if (rd.charge_details) {
+        const cd = rd.charge_details;
+        cards += `
+        <div class="card">
+          <div class="ch"><span>⛽</span><span class="ct">Charge Details (structured)</span></div>
+          <div class="cb">
+            <div class="fee-grid">
+              <div class="fee-box"><div class="fee-amt">${cd.gas_units_used || '—'}</div><div class="fee-lbl">Gas units</div></div>
+              <div class="fee-box"><div class="fee-amt">${cd.gas_price || '—'}</div><div class="fee-lbl">Price (gwei)</div></div>
+              <div class="fee-box"><div class="fee-amt">${cd.total_chain_native_cost?.value || '—'}</div><div class="fee-lbl">Total native</div></div>
+            </div>
+            ${cd.fiat_equivalent_cost ? `
+            <div class="dr"><div class="dk">fiat equivalent</div><div class="dv ok">$${cd.fiat_equivalent_cost.value} ${cd.fiat_equivalent_cost.currency}</div></div>
+            <div class="dr"><div class="dk">FX rate source</div><div class="dv">${cd.fiat_equivalent_cost.rate_source}</div></div>
+            ` : ''}
+            ${cd.explanation ? `<div style="margin-top:8px;padding:8px;background:var(--surface3);border-radius:5px;font-size:11px;color:var(--muted);line-height:1.5">${cd.explanation}</div>` : ''}
+          </div>
+        </div>`;
+      }
+    }
+    if (req.compensation) {
+      cards += `
+      <div class="card callout-green" style="border-radius:7px">
+        <div class="ch"><span>💸</span><span class="ct">Compensation Offered</span></div>
+        <div class="cb">
+          <div class="dr"><div class="dk">value</div><div class="dv ok">${req.compensation.value} ${req.compensation.currency || ''}</div></div>
+          ${req.compensation.token_dti ? `<div class="dr"><div class="dk">token DTI</div><div class="dv">${req.compensation.token_dti}</div></div>` : ''}
+          ${req.compensation.instruction_reference ? `<div class="dr"><div class="dk">instruction ref</div><div class="dv hi">${req.compensation.instruction_reference}</div></div>` : ''}
+        </div>
+      </div>`;
+    }
+    document.getElementById('rbody').innerHTML = `<div class="ani" style="display:flex;flex-direction:column;gap:10px">${cards}</div>`;
+    return;
+  }
+
+  if (_type === 'POST_ACTION') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s201">201 Created</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/investigation/{id}/action</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card">
+      <div class="ch"><span>⚡</span><span class="ct">Action Recorded</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">investigation_id</div><div class="dv hi">${simState.investigationId}</div></div>
+        <div class="dr"><div class="dk">action</div><div class="dv"><span class="status-pill st-pending">${req.action}</span></div></div>
+        ${req.action_reason ? `<div class="dr"><div class="dk">action_reason</div><div class="dv">${req.action_reason}</div></div>` : ''}
+        <div class="dr"><div class="dk">recorded_at</div><div class="dv">${new Date().toISOString()}</div></div>
+      </div>
+    </div>
+    <div class="card callout-amber" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;line-height:1.6">
+        <strong style="color:var(--amber)">Note:</strong>
+        The action is a <strong>request</strong>, not a unilateral state change. The responder evaluates and either acknowledges
+        (by responding with the requested information or by closing) or continues with the existing investigation flow.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  if (_type === 'GET') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/investigation/{id}</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card">
+      <div class="ch"><span>📁</span><span class="ct">Investigation Detail</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">investigation_id</div><div class="dv hi">${req.invid}</div></div>
+        <div class="dr"><div class="dk">eir</div><div class="dv">550e8400-e29b-41d4-a716-446655440099</div></div>
+        <div class="dr"><div class="dk">current_status</div><div class="dv"><span class="status-pill st-final">CLSD — Closed</span></div></div>
+        <div class="dr"><div class="dk">current_status_reason</div><div class="dv ok">CMPI — CorrectionMadeAsPerInquiry</div></div>
+      </div>
+    </div>
+    <div class="pgrid">
+      <div class="pbox">
+        <div class="prole">Requestor</div>
+        <div class="pname">Kraken Belgium BVBA</div>
+        <div class="pdet">5299000DUFB71VFOHVB49 · BE</div>
+      </div>
+      <div class="pbox">
+        <div class="prole">Responder</div>
+        <div class="pname">Bitvavo B.V.</div>
+        <div class="pdet">7245007VX57GR4IUVZ79 · NL</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>📜</span><span class="ct">Lifecycle (most recent first)</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">2026-06-16 16:08:22</div><div class="dv ok">RESPONSE_RECEIVED · status → CLSD<br/><span style="color:var(--muted);font-size:10px">Bitvavo responded with corrected_creditor, closed CMPI</span></div></div>
+        <div class="dr"><div class="dk">2026-06-15 14:22:18</div><div class="dv">CREATED · status PDNG<br/><span style="color:var(--muted);font-size:10px">Investigation created by Kraken Belgium</span></div></div>
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  if (_type === 'SEARCH') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/investigation/search</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="apill">
+      <span class="at">3 results</span>
+      <span class="af">page_size 50 · total_count_estimate 14</span>
+    </div>
+    <div class="sr-list">
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">inv-aabb1122-3344-5566-7788-99aabbccddee</span>
+          <span class="status-pill st-pending">PDNG</span>
+        </div>
+        <div class="sr-parties">Kraken Belgium <span style="color:var(--dim)">→</span> Bitvavo B.V.</div>
+        <div class="sr-meta">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--purple);background:rgba(188,140,255,.08);padding:1px 6px;border-radius:3px">UTAP</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-06-15 14:22</span>
+        </div>
+      </div>
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">inv-ccdd3344-5566-7788-99aa-bbccddeeff00</span>
+          <span class="status-pill st-pending">PDNG</span>
+        </div>
+        <div class="sr-parties">Coinbase Asia <span style="color:var(--dim)">→</span> Bitvavo B.V.</div>
+        <div class="sr-meta">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--cyan);background:rgba(121,192,255,.08);padding:1px 6px;border-radius:3px">RQFI</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-06-15 15:08</span>
+        </div>
+      </div>
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">inv-eeff5566-7788-99aa-bbcc-ddeeff001122</span>
+          <span class="status-pill st-pending">PDNG</span>
+        </div>
+        <div class="sr-parties">Example Bank AG <span style="color:var(--dim)">→</span> Bitvavo B.V.</div>
+        <div class="sr-meta">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--green);background:rgba(63,185,80,.08);padding:1px 6px;border-radius:3px">RQCH</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-06-16 11:42</span>
+        </div>
+      </div>
+    </div>
+    <div class="card callout-green" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">next_cursor:</strong>
+        <code style="font-family:var(--mono);font-size:10px;color:var(--cyan);background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px">eyJsYXN0X2lkIjoiaW52LWVlZmY1NTY2Iiwic29ydCI6ImNyZWF0ZWRfYXQifQ</code>
+        — pass as <code style="font-family:var(--mono);font-size:10px;color:var(--cyan)">?cursor=</code> on next call. Valid 24h.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+}
+
+function slaToDate(sla) {
+  if (!sla) return new Date(Date.now() + 5*24*3600*1000).toISOString();
+  const days = parseInt(sla.replace(/[^0-9]/g,'')) || 5;
+  return new Date(Date.now() + days*24*3600*1000).toISOString();
+}
+
+// Wire up changes to live-preview
+['f-msgid','f-rqstrid','f-eir','f-type','f-subtype','f-reasoncode','f-reasonprop',
+ 'f-sla','f-webhook','f-aiqv','f-aiqc','f-aiqdti','f-addinfo','f-narr',
+ 'f-rqname','f-rqlei','f-rqctry','f-rqemail',
+ 'f-roname','f-rolei','f-roctry','f-rorel',
+ 'f-rsname','f-rslei','f-rsctry','f-ername','f-erlei',
+ 'f-roresname','f-roreslei',
+ 'f-respstatus','f-respreason','f-respconf','f-respnarr',
+ 'f-corccrname','f-corccrlei','f-cordbtname','f-cordbtlei',
+ 'f-cdgas','f-cdprice','f-cdnative','f-cdfiat','f-cdexpl',
+ 'f-compv','f-compc','f-compinstr',
+ 'f-actcode','f-actreason',
+ 'f-refinstrid','f-refuetr','f-refe2e','f-reftrid','f-refreportid','f-reftxhash',
+ 'f-invid','f-lifecyclelimit',
+ 'f-searchstatus','f-searchtype','f-searchfrom','f-searchcp'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updatePreview);
+});
+
+setMethod('POST_INV');
+loadScenario('utap_wallet_unmapped');
+</script>
+
+</body>
+</html>
