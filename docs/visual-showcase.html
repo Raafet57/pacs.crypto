@@ -280,6 +280,7 @@
     color: var(--muted);
     font-size: 0.82rem;
     font-family: var(--mono);
+    overflow-wrap: anywhere;
   }
   .lifecycle li .step-status {
     margin-top: auto;
@@ -329,6 +330,7 @@
     margin: 0;
     color: var(--muted);
     font-size: 0.92rem;
+    overflow-wrap: anywhere;
   }
   .card .card-tag {
     margin-top: auto;
@@ -506,18 +508,49 @@
     <h1><span class="accent">pacs.crypto</span> visual reference — review showcase</h1>
     <p class="lede">
       A discussion artifact for Tom and spec reviewers: a single lifecycle view of the reference
-      stack, paired with the visual flow video. This page is not normative spec content — it is a
-      reading aid for the implemented reference server and the still-draft investigation family.
+      stack, paired with the visual flow video. This page keeps the PR in draft posture and does
+      not add normative API scope; it is a reading aid for the implemented reference server and
+      the still-draft investigation family.
     </p>
     <div class="pill-row" aria-label="Artifact tags">
       <span class="pill cyan">discussion artifact</span>
-      <span class="pill">non-normative</span>
+      <span class="pill">draft PR posture</span>
+      <span class="pill">no normative scope expansion</span>
       <span class="pill">reviewer-facing</span>
     </div>
   </div>
 </header>
 
 <main id="main" class="wrap">
+
+  <section aria-labelledby="scope-heading">
+    <span class="section-mark">00 · Scope lock</span>
+    <h2 id="scope-heading">Draft reference artifact, not normative expansion</h2>
+    <p class="section-lede">
+      This is the direction Tom's comments support: keep the PR draft, tighten the visual/reference
+      artifacts, and avoid adding new normative API surface while the E&amp;I design remains open.
+    </p>
+    <div class="grid-cards">
+      <article class="card green">
+        <span class="card-id">KEEP</span>
+        <h3>Instruction lifecycle, Travel Rule, finality</h3>
+        <p>Show the bank → sending VASP → chain → receiving VASP path and the status/finality evidence that reviewers can inspect.</p>
+        <span class="card-tag">implemented wedge</span>
+      </article>
+      <article class="card amber">
+        <span class="card-id">CLARIFY</span>
+        <h3>pacs.004, pacs.007, camt.056 boundaries</h3>
+        <p>Keep recognised return/reversal vocabulary visible, and label <code>camt.056</code> as pre-broadcast only.</p>
+        <span class="card-tag">alignment note</span>
+      </article>
+      <article class="card rose">
+        <span class="card-id">DO NOT LOCK</span>
+        <h3>Future E&amp;I / investigation lane</h3>
+        <p>Keep exception-family machinery as useful reference-server input, without forcing an Investigation API shape in this PR.</p>
+        <span class="card-tag">draft / TBD</span>
+      </article>
+    </div>
+  </section>
 
   <section aria-labelledby="video-heading">
     <span class="section-mark">01 · Primary cut</span>
@@ -631,14 +664,14 @@
         </li>
         <li class="s-impl">
           <span class="step-num">Return</span>
-          <span class="step-title">Return case</span>
-          <span class="step-note">pacs.004 vocabulary preserved</span>
+          <span class="step-title">Instruction return request</span>
+          <span class="step-note">POST /instruction/{instructionId}/return · pacs.004</span>
           <span class="step-status">implemented</span>
         </li>
         <li class="s-impl">
           <span class="step-num">Reverse</span>
-          <span class="step-title">Reversal path</span>
-          <span class="step-note">pacs.007-aligned</span>
+          <span class="step-title">Reversal request / status</span>
+          <span class="step-note">POST /instruction/{instructionId}/reverse · GET /instruction/{instructionId}/reversal-status · pacs.007</span>
           <span class="step-status">implemented</span>
         </li>
         <li class="s-part">
@@ -681,20 +714,21 @@
     <div class="grid-cards">
       <article class="card green">
         <span class="card-id">pacs.004</span>
-        <h3>Return vocabulary</h3>
+        <h3>Instruction return request</h3>
         <p>
-          Post-settlement return cases keep <code>pacs.004</code> wording. It is recognised
-          industry terminology and reads the way reviewers already expect.
+          <code>POST /instruction/{instructionId}/return</code> keeps <code>pacs.004</code>
+          wording visible while the compensating instruction remains explicit.
         </p>
         <span class="card-tag">implemented</span>
       </article>
 
       <article class="card green">
         <span class="card-id">pacs.007</span>
-        <h3>Reversal / remediation path</h3>
+        <h3>Reversal request / status</h3>
         <p>
-          <code>/return-cases/{id}/reverse</code> is the realistic blockchain remediation route
-          once a public-chain transfer is final.
+          <code>POST /instruction/{instructionId}/reverse</code> and
+          <code>GET /instruction/{instructionId}/reversal-status</code> stay aligned with
+          post-settlement remediation, not chain undo.
         </p>
         <span class="card-tag">implemented</span>
       </article>
@@ -730,8 +764,7 @@
     </p>
     <ol class="questions">
       <li>
-        Does this visual reference help orient spec discussion — i.e. is the
-        implemented-vs-draft boundary readable in a single pass?
+        Does this visual reference help orient spec discussion, and is the draft-PR / no-new-normative-scope boundary readable in a single pass?
         <span class="qmeta">If yes, we keep the lifecycle / alignment split as the standing review shape.</span>
       </li>
       <li>

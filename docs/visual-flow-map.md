@@ -2,12 +2,22 @@
 
 This note gives reviewers a visual entry point into the current `pacs.crypto` reference stack. It is intentionally descriptive rather than normative: the implemented reference server is concrete, while the richer investigation family remains draft until the spec design catches up.
 
+## Scope posture for this draft PR
+
+- Keep the PR in **draft**.
+- Do not expand the normative API surface in this branch.
+- Use the visual/reference artifacts to clarify the current lifecycle and boundaries.
+- Keep `pacs.004` and `pacs.007` visible as recognised payment vocabulary.
+- Treat `camt.056` as a pre-broadcast cancellation lane only.
+- Keep future E&I / investigation flows as draft reference-server input, not a spec commitment.
+
 ## Reviewer questions this map answers
 
 - Where do the Travel Rule record, payment instruction, status reads, finality evidence, returns, reversals, and investigation paths sit in one lifecycle?
 - Which parts are already implemented in the reference server?
 - Which ISO 20022 analogues are being preserved by name because they are recognised industry vocabulary?
 - Which parts are deliberately parked as draft input for future spec work?
+- Is the implemented-vs-draft boundary clear enough to support future E&I and liquidity-management discussion without forcing a merge decision?
 
 ## Main lifecycle
 
@@ -32,8 +42,9 @@ sequenceDiagram
   SVASP-->>Bank: camt.054-like notification<br/>camt.052/camt.053-like reporting views
 
   alt Post-settlement remediation
-    Bank->>SVASP: POST /return-cases<br/>pacs.004 return terminology preserved
-    Bank->>SVASP: POST /return-cases/{id}/reverse<br/>pacs.007-aligned reversal path
+    Bank->>SVASP: POST /instruction/{instructionId}/return<br/>pacs.004 return terminology preserved
+    Bank->>SVASP: POST /instruction/{instructionId}/reverse<br/>pacs.007-aligned reversal request
+    Bank->>SVASP: GET /instruction/{instructionId}/reversal-status<br/>poll reversal workflow status
   else Pre-broadcast cancellation window
     Bank->>SVASP: DELETE /instruction/{instructionId}<br/>camt.056 analogue only before broadcast
   else Rich investigation still draft
@@ -52,8 +63,8 @@ flowchart LR
   D --> E[Status and finality reads]
   E --> F[Reporting views<br/>camt.054 / camt.052 / camt.053]
 
-  D --> G[Return case<br/>pacs.004]
-  G --> H[Reverse path<br/>pacs.007]
+  D --> G[Return request<br/>POST /instruction/{instructionId}/return<br/>pacs.004]
+  G --> H[Reversal request/status<br/>POST /instruction/{instructionId}/reverse<br/>GET /instruction/{instructionId}/reversal-status<br/>pacs.007]
   C -. pre-broadcast only .-> I[Cancellation<br/>camt.056 analogue]
   E -. draft / not locked .-> J[Investigation family<br/>camt.026 / camt.027 / camt.087 TBD]
 
@@ -69,10 +80,13 @@ flowchart LR
 
 | Area | Current posture | Why |
 | --- | --- | --- |
+| Draft PR | Keep draft | The branch is a discussion/reference artifact, not a merge request for immediate normative adoption. |
+| Normative API scope | Do not expand in this pass | The next change should clarify artifacts and boundaries, not add new endpoints or lock investigation design prematurely. |
 | Reverse / return terminology | Preserve `pacs.004` and `pacs.007` wording | These names are recognised industry vocabulary and help reviewers understand the intent quickly. |
-| `/reverse` | Keep `pacs.007` aligned | Post-settlement remediation is the realistic blockchain case once a public-chain transfer is final. |
+| `/instruction/{instructionId}/return` | Use as the public return-review shape | It keeps the v1.2 discussion tied to the instruction lifecycle while the exception-family store remains an implementation detail. |
+| `/instruction/{instructionId}/reverse` and `/reversal-status` | Keep `pacs.007` aligned | Post-settlement remediation is the realistic blockchain case once a public-chain transfer is final. |
 | `camt.056` | Treat as pre-broadcast cancellation only | On a public chain, the cancellation window after broadcast is essentially zero. |
-| Pure status request | Use `GET /instruction/{instructionId}` | A dedicated richer status-request path is not needed for simple readback. |
+| Pure status readback | Use `GET /instruction/{instructionId}` | A dedicated richer status-request path is not needed for simple readback in this visual pass. |
 | Exception / investigation family | Keep as reference-server draft machinery | Useful concrete input, but the future spec shape should stay open until the design is clearer. |
 
 ## Suggested reviewer use

@@ -110,6 +110,7 @@
   .node.draft { border-color: var(--rose); border-style: dashed; }
   .node b { display:block; font-size: 28px; line-height: 1; }
   .node span { display:block; margin-top: 11px; color: var(--muted); font-size: 20px; font-family: JetBrains Mono, monospace; }
+  .node span.micro { margin-top: 8px; font-size: 15px; line-height: 1.15; }
   .n1 { left: 70px; top: 72px; }
   .n2 { left: 346px; top: 72px; }
   .n3 { left: 622px; top: 72px; }
@@ -166,10 +167,10 @@
       <div class="pill green">Travel Rule</div>
       <div class="pill green">Instruction</div>
       <div class="pill green">Finality</div>
-      <div class="pill amber">Return / reversal</div>
-      <div class="pill rose">Investigation draft</div>
+      <div class="pill amber">pacs.004 / pacs.007</div>
+      <div class="pill rose">E&amp;I draft</div>
     </div>
-    <div class="subtitle">Visual reference for reviewing the pacs.crypto lifecycle.</div>
+    <div class="subtitle">Draft PR visual reference: clarify lifecycle, do not expand normative scope.</div>
   </section>
 
   <section id="scene-2" class="clip scene" data-start="6.333" data-duration="6.253" data-track-index="1">
@@ -213,8 +214,8 @@
     <div class="map">
       <svg class="lines" viewBox="0 0 1580 560"><defs><marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#ff6b91"/></marker></defs><path class="line return" d="M420 126 H760"/><path class="line return" d="M990 126 H1210"/><path class="line draft" marker-end="url(#arrow2)" d="M875 235 V318"/></svg>
       <div class="node n2"><b>Instruction</b><span>FINAL</span></div>
-      <div class="node n7"><b>Return case</b><span>pacs.004</span></div>
-      <div class="node n5"><b>Reverse path</b><span>pacs.007</span></div>
+      <div class="node n7" style="width:360px;height:132px"><b>Return request</b><span class="micro">POST /instruction/{instructionId}/return</span></div>
+      <div class="node n5" style="left:1120px;width:430px;height:142px"><b>Reversal status</b><span class="micro">POST /instruction/{instructionId}/reverse</span><span class="micro">GET /instruction/{instructionId}/reversal-status</span></div>
       <div class="node draft" style="left:760px;top:318px;width:330px"><b>Investigation family</b><span>camt.026 / 027 / 087 TBD</span></div>
       <div class="caption-small" style="left: 715px; top: 262px;">draft input, not normative lock-in</div>
     </div>
