@@ -5297,6 +5297,22 @@ export class ReferenceStore {
   }
 
   releaseExpiredHold(normalized, record, persist) {
+    if (persist) {
+      // Compare-and-swap: the read paths that reach here (GET / search / the
+      // create-time duplicate check) are not under the per-instruction lock, so a
+      // concurrent read could already have released this hold. Re-read
+      // synchronously and transition only once, so the EXPIRED event is emitted a
+      // single time. This block has no await, so it is atomic on the event loop.
+      const row = this.getInstructionStmt.get(record.instruction_id);
+      const persisted = row ? parseJson(row.instruction_json, null) : null;
+      if (
+        persisted &&
+        (persisted.status !== 'PENDING' || !persisted.awaiting_signed_transaction)
+      ) {
+        return persisted;
+      }
+    }
+
     const expiredAt = nowIso();
     const expired = {
       ...normalized,

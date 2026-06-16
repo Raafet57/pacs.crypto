@@ -76,6 +76,18 @@ export function travelRuleDataToIvms101(data = {}) {
   }
   if (data.debtor && !data.debtor.name) unmapped.push('debtor.name');
   if (data.creditor && !data.creditor.name) unmapped.push('creditor.name');
+  // The core mapping carries name/LEI/country/wallet only; report anything else
+  // we drop (vLEI credentials, address subfields beyond country) per the
+  // module's "never silently drop" contract.
+  for (const [role, party] of [
+    ['debtor', data.debtor],
+    ['creditor', data.creditor],
+  ]) {
+    if (party?.vlei_credential) unmapped.push(`${role}.vlei_credential`);
+    for (const field of Object.keys(party?.postal_address ?? {})) {
+      if (field !== 'country') unmapped.push(`${role}.postal_address.${field}`);
+    }
+  }
 
   const ivms101 = {
     originator: {

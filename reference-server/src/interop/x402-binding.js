@@ -11,10 +11,16 @@
 
 function resolve(map, key, fallback = null) {
   if (!map || key === undefined || key === null) return fallback;
-  const value = map[key] ?? map[String(key)];
-  // Treat an empty-string mapping as unresolved so chain_dli/token_dti stay
-  // consistent with the "unresolvable" warning rather than being set to ''.
-  return value === undefined || value === null || value === '' ? fallback : value;
+  // Only own properties — otherwise keys like 'constructor'/'toString' would
+  // resolve to inherited Object.prototype members. Also treat '' as unresolved so
+  // chain_dli/token_dti stay consistent with the "unresolvable" warning.
+  for (const k of [key, String(key)]) {
+    if (Object.prototype.hasOwnProperty.call(map, k)) {
+      const value = map[k];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+  }
+  return fallback;
 }
 
 export function x402IntentToInstruction(intent = {}, options = {}) {
@@ -32,7 +38,8 @@ export function x402IntentToInstruction(intent = {}, options = {}) {
     warnings.push('amount missing — required for a valid instruction');
   }
 
-  const debtor = { name: payer.name };
+  const debtor = {};
+  if (payer.name) debtor.name = payer.name;
   if (payer.lei) debtor.lei = payer.lei;
   if (payer.vlei_credential) debtor.vlei_credential = payer.vlei_credential;
 
