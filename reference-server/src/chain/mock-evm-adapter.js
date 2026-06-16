@@ -322,6 +322,8 @@ export function createMockEvmChainAdapter() {
     id: 'mock-evm',
     mode: 'SIMULATED',
     chain_family: 'EVM',
+    // The mock simulates the delegated-signing lifecycle (no real custody key).
+    supports_delegated_signing: true,
 
     hasExpired(expiryDateTime) {
       return Boolean(expiryDateTime) && Date.parse(expiryDateTime) <= Date.now();

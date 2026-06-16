@@ -77,6 +77,15 @@ export function registerInstructionRoutes(app) {
       });
     }
 
+    if (custodyModel === 'DELEGATED_SIGNING' && !app.chainAdapter.supports_delegated_signing) {
+      // A custodial adapter would re-sign with the server's own key, defeating
+      // delegated signing — reject it rather than execute the wrong path.
+      return reply.code(501).send({
+        error: 'not_implemented',
+        message: 'Delegated signing is not supported by the configured chain adapter.',
+      });
+    }
+
     const travelRuleRecordId = request.body.travel_rule_record_id;
     if (travelRuleRecordId && !app.store.getTravelRuleRecord(travelRuleRecordId)) {
       return reply.code(400).send({

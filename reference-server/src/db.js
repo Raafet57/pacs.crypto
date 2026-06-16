@@ -461,6 +461,7 @@ function buildExecutionStatusResponse(record, chainAdapter = null) {
       record.payment_identification?.end_to_end_identification ?? null,
     travel_rule_record_id: record.travel_rule_record_id,
     status: record.status,
+    awaiting_signed_transaction: record.awaiting_signed_transaction ?? false,
     status_group: deriveInstructionStatusGroup(record.status),
     latest_status_at: latestStatusEvent?.status_at ?? record.updated_at,
     failure_reason: record.failure_reason,
@@ -3175,13 +3176,11 @@ export class ReferenceStore {
     // transaction until the instructing party submits the signed transaction.
     if (
       record.custody_model === 'DELEGATED_SIGNING' &&
-      initialStatus === 'PENDING'
+      initialStatus === 'PENDING' &&
+      this.chainAdapter.supports_delegated_signing
     ) {
       record.awaiting_signed_transaction = true;
-      record.unsigned_transaction =
-        typeof this.chainAdapter.buildUnsignedTransaction === 'function'
-          ? this.chainAdapter.buildUnsignedTransaction(record)
-          : { transaction_format: 'OTHER' };
+      record.unsigned_transaction = this.chainAdapter.buildUnsignedTransaction(record);
     }
 
     this.insertInstructionStmt.run(
@@ -3264,6 +3263,9 @@ export class ReferenceStore {
       // history; the executed lifecycle resumes from signature time via
       // lifecycle_anchor_at, so a late signature does not jump straight to FINAL.
       lifecycle_anchor_at: signedAt,
+      // the signing window is closed once signed; the original expiry deadline no
+      // longer applies to the now-executing transaction.
+      expiry_date_time: null,
     };
 
     this.saveInstruction(updated, {
@@ -3272,24 +3274,10 @@ export class ReferenceStore {
       emitNotifications: true,
     });
 
-    // The signed transaction must actually be broadcast. A real adapter
-    // broadcasts inside submitLifecycleState (the held record skipped it at
-    // creation); the mock adapter has no such hook and progresses on the
-    // simulated clock instead.
-    if (typeof this.chainAdapter.submitLifecycleState === 'function') {
-      const lifecycleState = await this.chainAdapter.submitLifecycleState(updated);
-      const submitted = buildInstructionLifecycleUpdate(updated, lifecycleState);
-      if (serialize(submitted) !== serialize(updated)) {
-        this.saveInstruction(submitted, {
-          previousRecord: updated,
-          emitEvents: true,
-          emitNotifications: true,
-        });
-        return { record: submitted };
-      }
-      return { record: updated };
-    }
-
+    // Resume the lifecycle. Delegated signing is only enabled on adapters that
+    // SIMULATE it (supports_delegated_signing) — a real custodial adapter rejects
+    // delegated submission up front, so the custodial submitLifecycleState path
+    // (which re-signs with the server's own key) is intentionally never used here.
     return {
       record: await this.advanceInstructionLifecycleAsync(updated, { persist: true }),
     };

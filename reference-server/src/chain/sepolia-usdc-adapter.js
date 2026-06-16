@@ -625,6 +625,10 @@ export function createSepoliaUsdcAdapter(config = {}) {
     id: 'sepolia-usdc',
     mode: normalizedConfig.broadcastEnabled ? 'TESTNET_BROADCAST' : 'TESTNET_READ_ONLY',
     chain_family: 'EVM',
+    // Custodial broadcaster: submitLifecycleState re-signs with the server's own
+    // key, so it cannot honour a party-signed (delegated) transaction. Delegated
+    // signing is therefore not supported on this adapter.
+    supports_delegated_signing: false,
 
     hasExpired(expiryDateTime) {
       return Boolean(expiryDateTime) && Date.parse(expiryDateTime) <= Date.now();

@@ -10,6 +10,12 @@
 const LEGAL_PERSON_NAME_TYPE = 'LEGL';
 const LEI_IDENTIFIER_TYPE = 'LEIX';
 
+function hasPartyIdentity(party) {
+  return Boolean(
+    party && (party.name || party.lei || party.postal_address?.country || party.country),
+  );
+}
+
 function ivmsLegalPerson(party = {}) {
   const name = party.name;
   const lei = party.lei;
@@ -73,11 +79,11 @@ export function travelRuleDataToIvms101(data = {}) {
 
   const ivms101 = {
     originator: {
-      originatorPersons: data.debtor?.name ? [ivmsLegalPerson(data.debtor)] : [],
+      originatorPersons: hasPartyIdentity(data.debtor) ? [ivmsLegalPerson(data.debtor)] : [],
       accountNumber: debtorWallet ? [debtorWallet] : [],
     },
     beneficiary: {
-      beneficiaryPersons: data.creditor?.name ? [ivmsLegalPerson(data.creditor)] : [],
+      beneficiaryPersons: hasPartyIdentity(data.creditor) ? [ivmsLegalPerson(data.creditor)] : [],
       accountNumber: creditorWallet ? [creditorWallet] : [],
     },
   };

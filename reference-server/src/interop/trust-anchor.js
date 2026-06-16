@@ -19,7 +19,7 @@ export function buildAccessCredential(subject = {}, options = {}) {
   // `eligibility` is the trust anchor's vouch (cleared to participate), not a
   // disclosure of a screening result: NOT_ELIGIBLE is deliberately ambiguous
   // (missing identity OR not yet attested) and never carries a reason.
-  const eligible = Boolean(subject.name && identityBound && subject.screening_completed);
+  const eligible = Boolean(subject.name && identityBound && subject.screening_completed === true);
 
   return {
     credential: {
@@ -56,8 +56,12 @@ export function verifyAccessCredential(credential = {}, policy = {}) {
   }
   const parsedNow = policy.now ? Date.parse(policy.now) : Date.now();
   const now = Number.isNaN(parsedNow) ? Date.now() : parsedNow;
-  if (credential.expires_at && Date.parse(credential.expires_at) < now) {
-    reasons.push('credential has expired');
+  if (credential.expires_at) {
+    const expiresAt = Date.parse(credential.expires_at);
+    // Fail closed: a malformed expiry is treated as expired, not never-expiring.
+    if (Number.isNaN(expiresAt) || expiresAt < now) {
+      reasons.push('credential has expired or has an invalid expiry');
+    }
   }
 
   return { allowed: reasons.length === 0, reasons };

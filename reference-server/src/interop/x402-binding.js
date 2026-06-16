@@ -56,7 +56,7 @@ export function x402IntentToInstruction(intent = {}, options = {}) {
     debtor,
     creditor: { name: intent.payee?.name ?? 'x402 resource server' },
     interbank_settlement_amount: {
-      amount: intent.amount !== undefined ? String(intent.amount) : undefined,
+      amount: intent.amount != null ? String(intent.amount) : undefined,
       currency: intent.currency ?? 'USD',
     },
     blockchain_instruction: blockchainInstruction,

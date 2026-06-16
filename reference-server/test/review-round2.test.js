@@ -47,46 +47,58 @@ test('mock lifecycle anchors to lifecycle_anchor_at, not created_at, after signi
   assert.equal(adapter.deriveLifecycleState(signedNow).status, 'PENDING');
 });
 
-test('delegated signing broadcasts via submitLifecycleState on a broadcast-capable adapter', async () => {
-  const base = createMockEvmChainAdapter();
+test('delegated signing is rejected on a custodial adapter, and never re-broadcasts custodially', async () => {
+  // A custodial adapter (supports_delegated_signing = false, with a
+  // submitLifecycleState that would re-sign with the server key) must reject
+  // delegated signing up front rather than execute the wrong custodial path.
   let submitCalls = 0;
-  const adapter = {
-    ...base,
-    id: 'stub-broadcast',
+  const custodialAdapter = {
+    ...createMockEvmChainAdapter(),
+    id: 'stub-custodial',
+    supports_delegated_signing: false,
     submitLifecycleState(record) {
       submitCalls += 1;
-      return {
-        status: 'BROADCAST',
-        failureReason: null,
-        onChainSettlement: {
-          ...record.on_chain_settlement,
-          transaction_hash: `0x${'a'.repeat(64)}`,
-          finality_status: 'PENDING',
-          confirmation_depth: 0,
-        },
-      };
+      return { status: 'BROADCAST', failureReason: null, onChainSettlement: record.on_chain_settlement };
     },
   };
 
-  const app = await buildApp({ chainAdapter: adapter });
+  const app = await buildApp({ chainAdapter: custodialAdapter });
   const create = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: delegatedPayload('INV-BROADCAST-RESUME'),
+    payload: delegatedPayload('INV-DELEGATED-UNSUPPORTED'),
+  });
+  assert.equal(create.statusCode, 501);
+  assert.equal(create.json().error, 'not_implemented');
+  assert.equal(submitCalls, 0, 'the custodial broadcast path is never reached for delegated signing');
+
+  await app.close();
+});
+
+test('a delegated instruction signed near its expiry does not flip to EXPIRED (expiry cleared on signing)', async () => {
+  const app = await buildApp();
+  const create = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: delegatedPayload('INV-SIGN-NEAR-EXPIRY', {
+      expiry_date_time: new Date(Date.now() + 500).toISOString(),
+    }),
   });
   assert.equal(create.statusCode, 201);
-  assert.equal(create.json().awaiting_signed_transaction, true);
-  assert.equal(submitCalls, 0, 'a held instruction is not broadcast at creation');
-
   const id = create.json().instruction_id;
+
+  // Sign while still held (well within the 500ms window).
   const sign = await app.inject({
     method: 'POST',
     url: `/instruction/${id}/signed-transaction`,
     payload: { signed_transaction_data: '0xsigned' },
   });
   assert.equal(sign.statusCode, 200);
-  assert.equal(submitCalls, 1, 'signing triggers the real broadcast');
-  assert.equal(sign.json().status, 'BROADCAST');
+
+  // After the original expiry passes, the signed instruction must NOT be EXPIRED.
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const detail = await app.inject({ method: 'GET', url: `/instruction/${id}` });
+  assert.notEqual(detail.json().status, 'EXPIRED');
 
   await app.close();
 });
