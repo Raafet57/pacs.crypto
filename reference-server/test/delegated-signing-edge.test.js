@@ -49,7 +49,7 @@ test('a cancelled held DELEGATED_SIGNING instruction cannot be revived by signin
   await app.close();
 });
 
-test('concurrent signed-transaction submissions execute exactly once (no lost update)', async () => {
+test('concurrent signed-transaction submissions sign exactly once (no lost update)', async () => {
   const app = await buildApp();
   const store = app.store;
 
@@ -62,10 +62,37 @@ test('concurrent signed-transaction submissions execute exactly once (no lost up
     store.submitSignedTransactionAsync(id, { signed_transaction_data: '0xsecond' }),
   ]);
 
-  // Serialized: both callers share one execution, so the second cannot
-  // double-progress the record or overwrite the first writer's signed data.
-  assert.equal(a, b);
-  assert.equal(a.record.signed_transaction.signed_transaction_data, '0xfirst');
+  // Serialized through the per-instruction lock: exactly one submission signs;
+  // the other sees the already-signed state and is rejected. No lost update.
+  const signed = [a, b].filter((r) => r.record);
+  const rejected = [a, b].filter((r) => r.error === 'not_awaiting');
+  assert.equal(signed.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(signed[0].record.signed_transaction.signed_transaction_data, '0xfirst');
+
+  await app.close();
+});
+
+test('a concurrent cancel and sign cannot revive a cancelled delegated instruction', async () => {
+  const app = await buildApp();
+  const store = app.store;
+
+  const created = await store.createInstructionAsync(delegatedPayload('INV-SIGN-CANCEL-RACE'));
+  const id = created.instruction_id;
+
+  // Cancel acquires the per-instruction lock first; the sign that follows must
+  // see CANCELLED and be rejected, never overwrite the terminal state.
+  const [cancelResult, signResult] = await Promise.all([
+    store.cancelInstructionAsync(id),
+    store.submitSignedTransactionAsync(id, { signed_transaction_data: '0xsigned' }),
+  ]);
+
+  assert.equal(cancelResult.cancellation.status, 'CANCELLED');
+  assert.equal(signResult.error, 'not_awaiting');
+
+  const final = await store.getInstructionAsync(id);
+  assert.equal(final.status, 'CANCELLED');
+  assert.equal(final.awaiting_signed_transaction, false);
 
   await app.close();
 });

@@ -2327,7 +2327,7 @@ export class ReferenceStore {
     this.chainAdapter = normalizeChainAdapter(chainAdapter);
     this.webhookRetryScheduleMs = normalizeRetryScheduleMs(webhookRetryScheduleMs);
     this.inFlightInstructionCreations = new Map();
-    this.inFlightSignedTransactions = new Map();
+    this.instructionLocks = new Map();
     this.db = new DatabaseSync(dbPath);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS travel_rule_records (
@@ -3213,21 +3213,29 @@ export class ReferenceStore {
     return record;
   }
 
-  async submitSignedTransactionAsync(instructionId, submission = {}) {
-    // Serialize per-instruction so concurrent submissions cannot both clear the
-    // awaiting gate: a non-atomic check-then-act would double-progress the
-    // record, emit duplicate events, and lose the first writer's signed data.
-    const inFlight = this.inFlightSignedTransactions.get(instructionId);
-    if (inFlight) {
-      return inFlight;
-    }
-    const work = this.runSignedTransactionSubmission(instructionId, submission).finally(
-      () => {
-        this.inFlightSignedTransactions.delete(instructionId);
-      },
+  // Serialize ALL mutating operations on a single instruction (sign AND cancel)
+  // through one per-instruction lock, so a concurrent cancel and sign cannot
+  // interleave their read-modify-write and clobber or revive each other.
+  runWithInstructionLock(instructionId, fn) {
+    const prev = this.instructionLocks.get(instructionId) ?? Promise.resolve();
+    const result = prev.then(fn, fn);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
     );
-    this.inFlightSignedTransactions.set(instructionId, work);
-    return work;
+    this.instructionLocks.set(instructionId, tail);
+    tail.then(() => {
+      if (this.instructionLocks.get(instructionId) === tail) {
+        this.instructionLocks.delete(instructionId);
+      }
+    });
+    return result;
+  }
+
+  async submitSignedTransactionAsync(instructionId, submission = {}) {
+    return this.runWithInstructionLock(instructionId, () =>
+      this.runSignedTransactionSubmission(instructionId, submission),
+    );
   }
 
   async runSignedTransactionSubmission(instructionId, submission = {}) {
@@ -5143,6 +5151,12 @@ export class ReferenceStore {
   }
 
   async cancelInstructionAsync(instructionId) {
+    return this.runWithInstructionLock(instructionId, () =>
+      this.runCancelInstruction(instructionId),
+    );
+  }
+
+  async runCancelInstruction(instructionId) {
     const current = await this.getInstructionAsync(instructionId);
     if (!current) {
       return null;

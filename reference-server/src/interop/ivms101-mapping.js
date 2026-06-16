@@ -102,10 +102,13 @@ export function ivms101ToTravelRuleData(ivms101 = {}) {
     ivms101.beneficiary?.accountNumber,
   );
 
-  const data = {
-    debtor: originator.party,
-    creditor: beneficiary.party,
-  };
+  const data = {};
+  if (Object.keys(originator.party).length > 0) {
+    data.debtor = originator.party;
+  }
+  if (Object.keys(beneficiary.party).length > 0) {
+    data.creditor = beneficiary.party;
+  }
   if (originator.wallet) {
     data.debtor_account = { proxy: { identification: originator.wallet } };
   }

@@ -20,6 +20,9 @@ export function createMockCctpAdapter({
     id: 'mock-cctp',
     mode: 'SIMULATED',
     chain_family: 'EVM-CCTP',
+    // Inherited from the mock base, but stated explicitly: this is a simulator,
+    // so it may simulate the delegated-signing lifecycle (no real custody key).
+    supports_delegated_signing: true,
 
     describeLifecycle(input = {}) {
       const metadata = base.describeLifecycle.call(this, input);

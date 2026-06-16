@@ -61,7 +61,8 @@ export function registerInteropRoutes(app) {
     if (!isObject(context)) return badRequest(reply, 'context is required.');
     const record = buildComplianceRecord(context);
     try {
-      return { record, filings: emitFilings(record, regimes) };
+      // A non-array `regimes` (e.g. JSON null) falls back to the default set.
+      return { record, filings: emitFilings(record, Array.isArray(regimes) ? regimes : undefined) };
     } catch (error) {
       return badRequest(reply, error.message);
     }
