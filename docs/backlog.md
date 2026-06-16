@@ -179,7 +179,7 @@ Acceptance criteria:
 
 ### Epic 13 - Delegated signing
 Priority: `P2`
-Status: `Planned`
+Status: `Implemented`
 Depends on: Epic 10 and Epic 11
 
 Work items:
@@ -219,15 +219,20 @@ Rule:
 
 These epics come from the interoperability research in
 [`interop-defi-tradfi.md`](interop-defi-tradfi.md) and are sequenced by horizon in
-[`interop-roadmap.md`](interop-roadmap.md). All are `P3` / `Deferred` relative to the
-current wedge: nothing here starts before the Epic 10–13 program and the open v1.3
-follow-ups land. The `Horizon` tag marks how cheaply each can be pulled forward (H0 =
-low-cost, additive; H3 = long-horizon, externally gated). Each maps to an opportunity
+[`interop-roadmap.md`](interop-roadmap.md). They remain `P3` (post-wedge expansion),
+but Epics 15–23 now have **reference slices implemented and tested** in
+`reference-server/`: additive validators (vLEI / settlement_transport / ERC-7943
+attestation / DTI-first), the selectable mock CCTP adapter, delegated signing, and
+the `src/interop/` modules for IVMS101, x402, Trust Anchor access, and multi-regime
+compliance reporting — proving each direction at the messaging layer without
+widening the executed corridor. Epic 24 stays deferred behind its external gate.
+The `Horizon` tag marks how cheaply each can be pulled forward (H0 = low-cost,
+additive; H3 = long-horizon, externally gated). Each maps to an opportunity
 `O1`–`O10` from the research note.
 
 ### Epic 15 - DTI-first identifier hardening
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H0 · Opportunity: O10
 
 Work items:
@@ -243,7 +248,7 @@ Acceptance criteria:
 
 ### Epic 16 - vLEI verifiable organisational identity
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H0 (spec) / H1 (runtime) · Opportunity: O3
 
 Work items:
@@ -259,7 +264,7 @@ Acceptance criteria:
 
 ### Epic 17 - Settlement-transport abstraction
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H1 · Opportunity: O1
 
 Work items:
@@ -275,7 +280,7 @@ Acceptance criteria:
 
 ### Epic 18 - Cross-chain reference-stack adapters (CCTP + Canton)
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H1 · Opportunity: O8
 Depends on: Epic 10 (chain-adapter seam), Epic 17
 
@@ -292,7 +297,7 @@ Acceptance criteria:
 
 ### Epic 19 - Travel Rule interoperability conformance layer
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H1 · Opportunity: O9
 
 Work items:
@@ -308,7 +313,7 @@ Acceptance criteria:
 
 ### Epic 20 - Tokenised-asset / RWA transfer spec
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H2 · Opportunity: O2
 
 Work items:
@@ -324,7 +329,7 @@ Acceptance criteria:
 
 ### Epic 21 - Trust Anchor / regulated-DeFi access profile
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H2 · Opportunity: O4
 
 Work items:
@@ -340,7 +345,7 @@ Acceptance criteria:
 
 ### Epic 22 - Multi-regime compliance-reporting substrate
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H2 · Opportunity: O7
 
 Work items:
@@ -356,7 +361,7 @@ Acceptance criteria:
 
 ### Epic 23 - Agentic-payment settlement binding
 Priority: `P3`
-Status: `Deferred`
+Status: `Implemented (reference slice)`
 Horizon: H2 · Opportunity: O5
 
 Work items:

@@ -20,10 +20,10 @@ Status meanings:
 | `GET /travel-rule/search` | `travel-rule-api-v1.3.yaml` | query params | `TravelRuleSearchResponse` | Implemented | Query validation now covers the spec-defined filter set used in the current server, including direction, status, callback status, currency, wallets, pagination, and sort. |
 | `GET /travel-rule/stats` | `travel-rule-api-v1.3.yaml` | query params | `TravelRuleStatsResponse` | Implemented | Stats envelope and aggregate totals are present for the current local dataset. |
 | `POST /instruction/quote` | `instruction-api-v1.3.yaml` | `QuoteRequest` | `QuoteResponse` | Implemented | Request validation now enforces token, DLI, amount, currency, and custody model fields. |
-| `POST /instruction` | `instruction-api-v1.3.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Validation enforces the mandatory pacs.008-derived parties, amount, charge bearer, and blockchain instruction fields. Per v1.3, `debtor_agent`/`creditor_agent` are optional (corporate-direct / self-hosting flows), and `custody_model` accepts `FULL_CUSTODY`, `DELEGATED_SIGNING`, and the new `SELF_CUSTODY` — but only `FULL_CUSTODY` is executed in this wedge (the other two clear validation and return `501`). |
+| `POST /instruction` | `instruction-api-v1.3.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Validation enforces the mandatory pacs.008-derived parties, amount, charge bearer, and blockchain instruction fields. Per v1.3, `debtor_agent`/`creditor_agent` are optional (corporate-direct / self-hosting flows), and `custody_model` accepts `FULL_CUSTODY`, `DELEGATED_SIGNING`, and `SELF_CUSTODY`. `FULL_CUSTODY` and `DELEGATED_SIGNING` execute; `SELF_CUSTODY` clears validation and returns `501`. Optional `settlement_transport`, `vlei_credential`, and `credential_attestation` (incl. ERC-7943 enforcement) fields are validated when present (Epics 16/17/20). |
 | `GET /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `InstructionStatusResponse` | Implemented | The returned object includes the required status surface plus extra reference-server fields. |
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
-| `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.3.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
+| `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.3.yaml` | `SignedTransactionSubmission` | delegated-signing response | Implemented | DELEGATED_SIGNING instructions are held with an `unsigned_transaction` until this route accepts the signed transaction, which lifts the gate and resumes the normal lifecycle (Epic 13). |
 | `POST /instruction/{instructionId}/return` | `instruction-api-v1.3.yaml` | `ReturnRequest` (pacs.004) | compensating-instruction response | Out of scope | New in v1.3. The reference server currently models post-settlement returns through the `return_case` exception surface (`POST /exceptions/returns`, `return_method = ON_CHAIN_COMPENSATING_TRANSFER`); aligning to this instruction-level endpoint and its reason-code vocabulary is a tracked follow-up. |
 | `POST /instruction/{instructionId}/reverse` | `instruction-api-v1.3.yaml` | `ReversalRequest` (pacs.007) | compensating-instruction response | Out of scope | New in v1.3. Sender-initiated reversal as a compensating transaction; not yet implemented as an instruction-level endpoint (see returns note). |
 | `GET /instruction/{instructionId}/reversal-status` | `instruction-api-v1.3.yaml` | n/a | `ReversalStatus` | Out of scope | New in v1.3. Reversal lifecycle read; not yet implemented. |
@@ -44,6 +44,23 @@ The v1.3 release added two specifications that the current bank-to-VASP wedge do
 |---|---|---|
 | `exception-investigation-api-v1.3.yaml` (Spec 4 — Exception & Investigation, camt.110/111) | Out of scope | The formal `/investigation/*` surface and camt.110/111 investigation types (`UTAP`, `RQFI`, `RQCH`, `ACCT`, `OTHR`) are not implemented. The reference server has a *related but divergent* operational exception surface under `/exceptions/*` (tracked below as an extension) that predates Spec 4; re-basing it onto camt.110/111 is a tracked follow-up. |
 | `liquidity-management-api-v1.3.yaml` (Spec 5 — Liquidity Management) | Out of scope | Own-account `/wallet-transfer`, `/wallet-position`, and `/wallet-limit` flows are outside the bank-to-VASP wedge and are deferred. |
+
+## Interoperability reference modules (Epics 15–23)
+
+These are tested reference components built from the DeFi ↔ TradFi interoperability
+research ([`interop-defi-tradfi.md`](interop-defi-tradfi.md)). They prove each
+direction at the messaging layer; only the CCTP adapter and delegated signing are
+wired into HTTP routes so far, the rest are importable modules pending route
+exposure.
+
+| Component | Epic | Form | Notes |
+|---|---|---|---|
+| `src/chain/mock-cctp-adapter.js` | 18 | chain adapter | Selectable via `REF_SERVER_CHAIN_ADAPTER=mock-cctp`; settles through existing routes with CCTP burn-and-mint metadata. |
+| `src/interop/ivms101-mapping.js` | 19 | module | Bidirectional Spec 1 ⇄ IVMS101 core-field mapping (name, LEI, country, wallet); unmapped fields reported. |
+| `src/interop/x402-binding.js` | 23 | module | x402 agent intent → compliant instruction; DTI-first resolution; Travel Rule gap surfaced as a warning. |
+| `src/interop/trust-anchor.js` | 21 | module | Issue/verify permissioned-pool access credentials; asserts eligibility only, no sanctions reasoning. |
+| `src/interop/compliance-reporting.js` | 22 | module | One canonical record → MiCA `auth.117`-shaped + GENIUS-shaped filings. |
+| `vlei_credential` / `settlement_transport` / `credential_attestation` validators | 16/17/20 | validation | Optional, additive; validated when present and round-trip through the store. |
 
 ## Reference-server extensions
 
