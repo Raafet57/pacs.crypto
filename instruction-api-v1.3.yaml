@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: pacs.crypto — Blockchain Payment Instruction API
-  version: 1.0.0
+  version: 1.3.0
   description: |
     # Blockchain Payment Instruction API
 
@@ -28,21 +28,126 @@ info:
     banking chains of three or more intermediary agents, RTGS clearing channel codes,
     mandate data) are omitted or marked optional with explanatory notes.
 
+    ## Flow variants — who instructs whom
+
+    The Instruction API is designed for use across several operational
+    configurations. The data model is the same in each case; what varies is
+    which parties are present and which fields are populated.
+
+    **Bank to VASP.** The canonical case. A bank instructs its VASP partner
+    to execute an on-chain transfer for a customer. `debtor_agent` is the
+    sending bank, `creditor_agent` is the receiving VASP. The customer is
+    the `debtor`. The VASP signs and broadcasts (full custody) or returns an
+    unsigned transaction to the bank's HSM (delegated signing).
+
+    **Corporate to VASP.** A corporate treasury instructs a VASP directly,
+    without an intermediating bank. Increasingly relevant for large corporates
+    managing tokenised cash positions where the bank role on the chain leg
+    can be reduced. `debtor_agent` is omitted; `debtor` is the corporate.
+    `creditor_agent` is the receiving VASP. Custody is typically full custody
+    at the VASP, occasionally delegated signing where the corporate runs its
+    own HSM.
+
+    **Corporate to bank.** A corporate instructs its bank for onward processing.
+    The bank acts as the executing party from the corporate's perspective and
+    as the instructing party towards the VASP. Operationally this is two
+    instructions in sequence: the customer-side pain.001 (out of scope for
+    this API) feeding into a bank-to-VASP instruction described above.
+
+    **Corporate self-custody.** Where the originating party self-custodies
+    (operates its own node or holds wallet keys directly), it signs and
+    broadcasts the transaction itself. The Instruction API is not used by
+    the originator in this case because there is no party to instruct. The
+    Travel Rule API remains the principal regulated information exchange.
+    However, if the corporate uses the Instruction API to record the
+    transaction for reconciliation or reporting with a VASP that mirrors
+    its position, `debtor_agent` is omitted and `custody_model` is
+    `SELF_CUSTODY`.
+
+    **Mixed receiver self-custody.** Where the beneficiary self-custodies
+    (the recipient wallet is controlled directly by the beneficiary party,
+    not by a VASP on their behalf), `creditor_agent` is omitted. The
+    instructing-side flow is otherwise unchanged.
+
+    The optionality of `debtor_agent` and `creditor_agent` introduced in
+    v1.3 supports these configurations. Validation rules that previously
+    assumed the presence of these agents are now conditional on their
+    presence.
+
     ## Custody model
 
-    Two custody arrangements are supported:
+    Three custody arrangements are supported:
 
     **Full custody** — the VASP holds private keys on behalf of the instructing party.
     The instructing party submits the instruction; the VASP signs and broadcasts.
     This is the simpler model and suitable for most bank-VASP relationships.
     The `nonce` field is not used.
 
-    **Delegated signing** — the instructing party holds its own private key (typically
-    in an HSM). The flow is two-step: (1) POST instruction → VASP returns unsigned
-    transaction; (2) instructing party signs and submits signed transaction via
-    `POST /instruction/{instructionId}/signed-transaction`. The VASP broadcasts and
-    reports confirmation. The `nonce` field may be populated by the VASP in step 1
-    or provided by the instructing party if it manages its own nonce sequence.
+    **Delegated signing** — the instructing party (typically a bank with its own
+    HSM) holds the private key. The flow is two-step: (1) POST instruction → VASP
+    returns unsigned transaction or signing hash; (2) instructing party signs and
+    submits signed transaction via `POST /instruction/{instructionId}/signed-transaction`.
+    The VASP broadcasts and reports confirmation. The `nonce` field may be populated
+    by the VASP in step 1 or provided by the instructing party if it manages its own
+    nonce sequence.
+
+    **Self-custody** — the originator (typically a corporate treasury with its
+    own node or wallet) holds the private key and broadcasts the transaction
+    directly to the chain, without VASP involvement on the signing side. The
+    Instruction API is not strictly needed in this case: there is no VASP to
+    instruct. The `SELF_CUSTODY` value is provided for the case where the
+    originator nevertheless uses the API to record the transaction with a
+    partner VASP for reconciliation, audit, or reporting purposes (for example,
+    a partner VASP that maintains a mirrored view of the corporate's position).
+    In this case `debtor_agent` is omitted and the VASP does not act as the
+    signing party.
+
+    ### Two delegated signing payload formats
+
+    The VASP returns one of two payload formats in step 1, selected by the
+    instructing party via the `signing_payload_format` field on the instruction:
+
+    **Full unsigned transaction** (default) — the VASP returns the complete
+    unsigned blockchain transaction in wire format (RLP-encoded for EVM, PSBT for
+    Bitcoin, etc). The signing infrastructure (HSM, signing service) constructs
+    the hash from the transaction internally and signs it, with full visibility
+    into the transaction content. This pattern allows the HSM to enforce signing
+    policies based on transaction semantics (e.g. amount limits, allowlist
+    destinations) and to log meaningful audit records. Recommended for
+    enterprise HSMs and signing services that natively support the relevant
+    chain's transaction format.
+
+    **Compact signing hash** — the VASP returns a precomputed signing hash plus
+    cross-check fields (instruction ID, chain DLI, amount, expected recipient,
+    nonce) signed by the VASP. The signing infrastructure receives the hash and
+    signs it without seeing the underlying transaction. The instructing party's
+    application layer is responsible for verifying the cross-check fields
+    against its own record of the original instruction before passing the hash
+    to the signing service.
+
+    The compact format is appropriate for institutional contexts where the
+    signing service genuinely cannot reconstruct chain-specific transaction
+    formats internally — for example, MPC threshold signing services that
+    produce signatures over arbitrary 32-byte digests, hardware-wallet
+    integrations for non-EVM chains, or air-gapped signers that operate on
+    presented hashes only.
+
+    The compact format **shifts the verification responsibility** from the
+    signing service (which sees the full transaction in the default pattern)
+    to the instructing party's application layer (which sees the cross-check
+    fields and must verify them before forwarding the hash). Implementers must
+    treat this as a security property change: a compromised application layer
+    feeding a malicious hash to an HSM cannot be detected by the HSM itself.
+    The compact format should therefore be used only in trusted-VASP contexts
+    where the relationship is established with sufficient operational, legal,
+    and compliance assurance.
+
+    To make the cross-check fields a binding commitment by the VASP, the
+    `SigningHashPayload` is itself end-to-end signed by the VASP under its
+    operational signing key (separate from any chain-specific keys). This
+    converts the cross-check fields — including the amount — into a
+    non-repudiation artefact: the VASP cannot later claim that the hash they
+    presented was for a different transaction or amount.
 
     ## On/off-ramp
 
@@ -62,16 +167,6 @@ info:
     transfers where DEX liquidity depth affects the effective rate. If the VASP
     cannot execute within the slippage tolerance, the instruction is rejected with
     status `SLIPPAGE_EXCEEDED` rather than executed at an unexpected rate.
-
-    ## Note on DTI and DLI example values
-
-    Example DTI values (e.g. `T9B3X8H2K`, `X9J9XDMTD`) used throughout this
-    specification are illustrative and may not correspond to live entries in the
-    DTIF registry (https://dtif.org). ISO 24165-2 DLI is an emerging companion
-    standard to ISO 24165-1 DTI; until DLIs are broadly registered, implementers
-    may use the native-token DTI of a chain as a proxy chain identifier
-    (e.g. DTI `XB0MQJ1K5` for Ether → Ethereum Mainnet). Implementers must verify
-    actual DTI and DLI values against the DTIF registry at integration time.
 
     ## Pre-execution quote
 
@@ -101,35 +196,6 @@ info:
     finality at ~13 minutes independent of confirmation count; Bitcoin convention is
     6 confirmations; Solana achieves finality in approximately 400ms.
 
-    ## Dual-layer status — pacs.002 alignment
-
-    The `InstructionStatusResponse` carries two parallel status views. The
-    `iso_status` field uses ISO 20022 pacs.002 `TransactionIndividualStatus1Code`
-    values (`ACSP`, `ACSC`, `ACCC`, `ACWC`, `PDNG`, `RJCT`, `CANC`, `ACTC`),
-    suitable for direct ingestion by bank treasury systems already processing
-    pacs.002 messages. The `blockchain_status` field carries the granular
-    pacs.crypto `InstructionStatus` enum (`PENDING`, `BROADCAST`, `CONFIRMING`,
-    `FINAL`, `SLIPPAGE_EXCEEDED`, `CHAIN_REORG`, etc.) for operations teams
-    needing blockchain-specific detail. Both are always populated and the
-    mapping between them is deterministic and documented on `ISOTransactionStatus`.
-
-    Rejection and change reasons use `ISOStatusReasonCode`, which reuses the
-    standard ISO `ExternalStatusReason1Code` vocabulary (`AC01`, `AM04`, `CUST`,
-    `NARR`, etc.) augmented with pacs.crypto proprietary blockchain-specific
-    extensions (`SLIPPAGE_EXCEEDED`, `GAS_PRICE_EXCEEDED`, `CHAIN_REORG`,
-    `ATTESTATION_INVALID`, etc.).
-
-    `POST /instruction/{instructionId}/status-request` is the pacs.028
-    `FIToFIPaymentStatusRequest` analogue, used to proactively request a fresh
-    status evaluation when an expected update has not arrived. The response
-    is the same `InstructionStatusResponse` schema.
-
-    Instruction cancellation via `DELETE /instruction/{instructionId}` follows
-    camt.056 / camt.029 semantics — the request body carries
-    `CancellationReasonCode` (camt.056 `ExternalCancellationReason1Code`) and
-    the response carries `cancellation_resolution_status` with camt.029 values
-    (`ACCR`, `RJCR`, `PDCR`).
-
     ## Sanctions compliance
 
     Sanctions screening is performed by the VASP as an independent regulatory
@@ -155,6 +221,176 @@ info:
     The instructing party retains its own independent sanctions screening obligations
     for its customers and for the counterparty wallets it instructs to fund. Receiving
     a `FINAL` status from the VASP does not constitute a sanctions clearance.
+
+    ## Returns and reversals — compensating transactions
+
+    On-chain transactions cannot be reversed once final. A payment that is settled
+    on-chain stays settled. The blockchain has no equivalent to the "unwind" semantics
+    that ISO 20022 pacs.004 (return) and pacs.007 (reversal) assume in traditional
+    payment systems, where a sending bank can ask a receiving bank to reverse a wire
+    transfer by debiting the credited account and re-crediting the original.
+
+    The pacs.crypto remediation model is therefore: **a compensating transaction in
+    the opposite direction, linked to the original by reference**. The receiving party
+    cannot give back what they have already received except by sending it back. That
+    is the only operation the chain supports, and it is the one pacs.crypto exposes.
+
+    The relationship between pacs.crypto endpoints and ISO 20022 messages:
+
+    | ISO 20022 | pacs.crypto endpoint | Initiator | Mechanism |
+    |---|---|---|---|
+    | pacs.004 (Return) | `POST /instruction/{id}/return` | Receiving party (creditor or creditor agent) | New compensating instruction in opposite direction |
+    | pacs.007 (Reversal) | `POST /instruction/{id}/reverse` | Sending party (debtor or debtor agent) | New compensating instruction in opposite direction |
+    | camt.056 (Cancellation request, pre-broadcast) | `DELETE /instruction/{instructionId}` | Either party | Direct cancellation if not yet broadcast |
+    | camt.056 (Cancellation request, post-finality) | `POST /instruction/{id}/return` or `/reverse` (with reason `CANC`) | Either party | Compensating transaction, requires receiver consent |
+
+    The first two rows are the post-finality remediation cases (the original
+    transaction is `FINAL` and cannot be unwound on-chain). The third row is the
+    pre-broadcast cancellation case (covered by the existing `DELETE` endpoint and
+    unchanged by this increment). The fourth row covers the case where a party wants
+    to cancel a transaction that has already settled, which on-chain is operationally
+    identical to a return or reversal — the only honest mechanism is a compensating
+    transfer.
+
+    ### Compensating transaction semantics
+
+    A compensating transaction produced by `POST /instruction/{id}/return` or
+    `POST /instruction/{id}/reverse`:
+
+    - Is itself a new payment instruction with its own `instruction_id`, its own
+      `uetr`, its own credential attestation requirements, and its own Travel Rule
+      obligation under FATF Recommendation 16.
+    - Carries `original_instruction_id`, `original_uetr`, and `original_transaction_hash`
+      fields linking it to the transaction it is compensating.
+    - Carries a structured `return_reason` or `reversal_reason` from the pacs.004 /
+      pacs.007 reason code sets (`AC01`, `AM05`, `BE04`, `RR04`, `CANC`, etc.),
+      preserved for downstream regulatory reporting.
+    - Has its own settlement lifecycle. The compensating transaction goes through
+      `PENDING` → `BROADCAST` → `CONFIRMING` → `FINAL` exactly like any other
+      instruction.
+    - Does not modify the original transaction's status. The original remains `FINAL`
+      with an additional flag indicating that a compensating transaction has been
+      issued (statuses `RETURNED` and `REVERSED` on the original record are derived
+      states, not lifecycle states).
+
+    The receiving party must consent to receive a compensating transfer. There is no
+    equivalent of the traditional return mechanism where a receiving bank can
+    unilaterally reject and return a credit — on-chain, the funds have already
+    arrived at the destination wallet, and the holder of that wallet must cooperate
+    to send them back. This consent is bilateral and out-of-band in the current spec;
+    it may be formalised in a future increment.
+
+    ### Reason code semantics
+
+    The return and reversal reason codes preserve the ISO 20022 reason code semantics
+    with one extension specific to crypto:
+
+    - `CANC` — Cancellation request from originator after settlement (covers the
+      "I sent this by mistake, please send it back" case)
+    - `AC01` — Incorrect account number / wrong wallet address (covers the
+      "address fat-finger" case where the original intended beneficiary did not
+      receive the transfer)
+    - `AC04` — Account closed (covers VASP-side wallet retirement)
+    - `AM05` — Duplication
+    - `BE04` — Missing creditor address (informational; does not block on-chain)
+    - `RC03` — Invalid debtor BIC (correspondent-banking case; rare for crypto)
+    - `RR04` — Regulatory reason (covers post-settlement sanctions match, handled
+      with tipping-off considerations — see Sanctions compliance section above)
+    - `FRAD` — Fraudulent originator (covers the "originating bank discovered fraud
+      after settlement" case)
+    - `TECH` — Technical problem (covers the case where the original transfer
+      completed but with technical anomalies the parties have agreed to remediate)
+    - `NARR` — Narrative (free text in `additional_information` if no code applies)
+
+    ### Limitations honestly stated
+
+    - A compensating transaction requires the holder of the destination wallet to
+      participate. If the receiving party does not consent or has lost control of
+      the wallet, no remediation is possible through this mechanism.
+    - A compensating transaction has its own gas cost, its own finality lifecycle,
+      and its own regulatory implications. It is not a costless undo.
+    - Sanctions remediation is constrained by tipping-off rules. If a return is
+      initiated for reason `RR04` (regulatory), the implementation must not
+      communicate the sanctions detail to the original sender. The pattern
+      established in the Sanctions compliance section above applies. The same
+      discipline applies to reversal rejections — see "Reversal rejection
+      semantics" below.
+
+    ### Reversal rejection semantics
+
+    Receivers may reject a reversal request for a range of operational and
+    confidentiality reasons. The structured rejection codes provided
+    (`WALLET_LOST_CONTROL`, `CUSTOMER_REFUSED`, `OPERATIONAL`,
+    `INVESTIGATION_PENDING`, `OTHER`) are deliberately constructed so that none
+    of them signals a regulatory or sanctions-related reason directly.
+
+    There is no `RR04` or other regulatory rejection code. This is the same
+    architectural discipline that drives the Sanctions compliance section
+    above: introducing a structured code to express *why* a regulatory action
+    happened creates a tipping-off vocabulary, even when the intention is the
+    opposite. A receiver who refuses to issue a compensating transaction for
+    sanctions-related reasons must use `OTHER` (or `INVESTIGATION_PENDING`
+    where genuinely accurate), and must not populate the optional
+    `rejection_reason` narrative with anything that would reveal the
+    regulatory underpinning.
+
+    The `OTHER` code is the catch-all that absorbs both routine rejections
+    (operational quirks, customer-confidentiality matters, scheduling) and
+    genuinely undisclosable rejections. The senders of reversal requests
+    cannot infer that an `OTHER` rejection is sanctions-related, because most
+    `OTHER` rejections in practice will be routine. That statistical cover is
+    the discipline.
+
+    Senders receiving an unexplained or `OTHER`-coded rejection must not
+    attempt to infer the underlying reason from the rejection code, the
+    response timing, or any other signal. They must treat the rejection as
+    requiring their own independent compliance review based on their own
+    legal and operational obligations (which differ between banks and
+    VASPs operating under financial services authorisation, and corporate
+    end-customers operating under general law).
+
+    ### Reversal status push notification
+
+    Reversal request lifecycles span time periods (the receiver may take
+    minutes, hours, or days to respond, and the compensating transaction once
+    issued has its own settlement lifecycle). Polling-only status retrieval
+    is operationally weak in this context: the sender has no idea when to
+    poll, the receiver has no obligation to respond on any particular
+    timeline, and the most operationally important transitions — receiver
+    rejection, compensating transaction reaching `FINAL` — are exactly the
+    ones the sender most needs to know about quickly.
+
+    The spec therefore expects receiving VASPs to **push status updates** to
+    the sending VASP whenever the reversal request transitions or the
+    compensating transaction's lifecycle progresses. This is equivalent in
+    spirit to camt.029 (Resolution of Investigation) responding to camt.056
+    (Cancellation Request) in traditional banking.
+
+    **Required push events:**
+
+    - Receiver's initial response (`REQUESTED` → `ACCEPTED` or `REJECTED`)
+    - Compensating instruction lifecycle progression (`PENDING` → `BROADCAST`
+      → `CONFIRMING` → `FINAL`), at each major transition
+    - Reversal request transitioning to `COMPLETED` when the compensating
+      transaction reaches `FINAL`
+
+    **Optional push events:**
+
+    - Receiver requests additional information (e.g. for `FRAD` reasons
+      requiring further context before deciding)
+    - Sender withdrawal acknowledged
+
+    The push payload schema is `ReversalStatusUpdate`. It is delivered to a
+    callback URL specified by the sender either at request time (via the
+    `webhook_url` field on `ReversalRequest`) or via prior bilateral
+    arrangement between the sending and receiving VASPs. Authentication and
+    retry behaviour follow the same pattern as the Travel Rule callback
+    described in the pacs.crypto Travel Rule API.
+
+    `GET /instruction/{instructionId}/reversal-status` remains available as a
+    fallback for missed pushes, audit reconciliation, and explicit lookups.
+    A complete implementation, however, must support push delivery — relying
+    on the sender to poll is not sufficient.
 
     ## Status push notification (webhook)
 
@@ -234,6 +470,8 @@ tags:
     description: Instruction status and on-chain confirmation reporting
   - name: Signed Transaction
     description: Delegated signing — submit signed transaction to VASP for broadcast
+  - name: Returns and Reversals
+    description: Compensating on-chain transactions for previously settled instructions (pacs.004 / pacs.007 analogues)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PATHS
@@ -296,10 +534,12 @@ paths:
         In delegated signing mode, the VASP returns the unsigned transaction
         in the response body for the instructing party to sign and resubmit.
 
-        **Required fields** follow pacs.008 mandatory elements:
+        **Required fields** follow pacs.008 mandatory elements minus the
+        agents (see flow-variants note in the spec description):
         `payment_identification`, `interbank_settlement_amount`, `charge_bearer`,
-        `debtor`, `debtor_agent`, `creditor_agent`, `creditor`, plus
-        `blockchain_instruction` for chain/token/wallet specification.
+        `debtor`, `creditor`, plus `blockchain_instruction` for
+        chain/token/wallet specification. `debtor_agent` and `creditor_agent`
+        are optional from v1.3 to support corporate-direct and self-custody flows.
 
         **Travel Rule linkage:** For transfers above the FATF Travel Rule threshold,
         a Travel Rule record should be pre-submitted to the Travel Rule API and its
@@ -328,6 +568,10 @@ paths:
                 $ref: '#/components/examples/Example_USDC_OnRamp'
               btc_full_custody:
                 $ref: '#/components/examples/Example_BTC_FullCustody'
+              usdc_corporate_to_vasp:
+                $ref: '#/components/examples/Example_USDC_CorporateToVASP'
+              usdc_self_custody:
+                $ref: '#/components/examples/Example_USDC_SelfCustody_Reconciliation'
       responses:
         '201':
           description: |
@@ -393,30 +637,18 @@ paths:
     delete:
       tags: [Instruction]
       operationId: cancelInstruction
-      summary: Cancel a pending instruction (camt.056 analogue)
+      summary: Cancel a pending instruction
       description: |
-        Attempts to cancel an instruction that has not yet been broadcast to
-        the chain. Cancellation is only possible in status `PENDING` or `QUOTED`.
+        Attempts to cancel an instruction that has not yet been broadcast to the
+        chain. Cancellation is only possible in status `PENDING` or `QUOTED`.
         Once the transaction is in the mempool (`BROADCAST`) or confirmed
-        (`CONFIRMING` / `FINAL`), cancellation is not possible; the response is
-        `CancellationResponse` with `cancellation_resolution_status = RJCR`
-        (and HTTP 200 — the cancellation request itself succeeded, even though
-        the cancellation could not be effected).
+        (`CONFIRMING` / `FINAL`), cancellation is not possible and the VASP will
+        return `409 CANCELLATION_TOO_LATE`.
 
-        Analogue of ISO 20022 camt.056 `FIToFIPaymentCancellationRequest`.
-        The response follows camt.029 `ResolutionOfInvestigation` semantics,
-        carrying `ACCR` (accepted), `RJCR` (rejected), or `PDCR` (pending).
-
-        **Request body is optional:** a DELETE with no body cancels the
-        instruction with an implicit `CUST` (RequestedByCustomer) reason.
-        For regulated contexts, disputed instructions, or audit-sensitive
-        cancellations, provide a `CancellationRequest` body with an explicit
-        reason code.
-
-        **Note:** In delegated signing mode, if the instructing party has
-        already signed and submitted the signed transaction, the VASP cannot
-        prevent broadcast even if it has not yet relayed the transaction. The
-        instructing party should not sign until ready to proceed.
+        **Note:** In delegated signing mode, if the instructing party has already
+        signed and submitted the signed transaction, the VASP cannot prevent broadcast
+        even if it has not yet relayed the transaction. The instructing party should
+        not sign until ready to proceed.
       parameters:
         - name: instructionId
           in: path
@@ -424,108 +656,24 @@ paths:
           schema:
             type: string
             format: uuid
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CancellationRequest'
-            examples:
-              customer_requested:
-                summary: Customer-requested cancellation
-                value:
-                  reason_code: CUST
-                  reason_text: Customer retracted the instruction after reviewing quote
-              duplicate:
-                summary: Duplicate instruction
-                value:
-                  reason_code: DUPL
-                  reason_text: Duplicate of instruction 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
-          description: |
-            Cancellation request processed. Inspect `cancellation_resolution_status`
-            in the response body — `ACCR` means the instruction is cancelled;
-            `RJCR` means cancellation was not possible (instruction proceeds).
+          description: Instruction cancelled
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CancellationResponse'
-              examples:
-                accepted:
-                  summary: Cancellation accepted
-                  value:
-                    instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
-                    cancellation_resolution_status: ACCR
-                    status: CANCELLED
-                    cancellation_reason_code: CUST
-                    cancellation_reason_text: Customer retracted the instruction after reviewing quote
-                    cancelled_at: "2026-04-23T14:32:00Z"
-                rejected_too_late:
-                  summary: Cancellation rejected — already broadcast
-                  value:
-                    instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
-                    cancellation_resolution_status: RJCR
-                    status: BROADCAST
-                    cancellation_reason_code: CUST
-                    rejection_reason: Transaction broadcast to chain 400ms before cancellation request arrived
-                    cancelled_at: "2026-04-23T14:32:00Z"
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /instruction/{instructionId}/status-request:
-    post:
-      tags: [Status]
-      operationId: requestInstructionStatus
-      summary: Request a fresh status for an instruction (pacs.028 analogue)
-      description: |
-        Proactively requests the current status of an instruction. Analogue of
-        ISO 20022 pacs.028 `FIToFIPaymentStatusRequest`.
-
-        Used when the instructing party wishes to query the current status —
-        typically when an expected status update has not arrived within a
-        reasonable time (e.g. after `broadcast_at + 2 hours` for an EVM
-        instruction without a FINAL status).
-
-        By default, the VASP re-queries the chain for confirmation depth and
-        finality before responding. Set `refresh_from_chain = false` for
-        low-cost polling from cached state.
-
-        **Response:** `InstructionStatusResponse` — identical schema as
-        `GET /instruction/{instructionId}`, carrying both `iso_status`
-        (pacs.002-aligned) and `blockchain_status` fields in the dual-layer
-        status model, plus the `status_history` of transitions.
-
-        **When to use this vs `GET`:** The GET endpoint returns the current
-        cached status, cheap and suitable for frequent polling. The status
-        request endpoint explicitly re-evaluates on-chain state, more expensive
-        but authoritative. Treasury systems that only need the latest cached
-        status should use GET; operations teams troubleshooting a delayed
-        instruction should use the status request.
-      parameters:
-        - name: instructionId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PaymentStatusRequest'
-            example:
-              request_id: 98765432-1234-4abc-9def-123456789abc
-              request_reason: No status update received since broadcast_at + 3h
-              refresh_from_chain: true
-      responses:
-        '200':
-          description: Current instruction status with dual-layer status fields and full history
+        '409':
+          description: Cancellation not possible — instruction already broadcast or confirmed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InstructionStatusResponse'
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: CANCELLATION_TOO_LATE
+                message: Transaction already in mempool — cannot cancel
+                instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
+                status: BROADCAST
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -533,18 +681,31 @@ paths:
     post:
       tags: [Signed Transaction]
       operationId: submitSignedTransaction
-      summary: Submit a signed transaction for broadcast (delegated signing only)
+      summary: Submit a signed transaction or signed hash for broadcast (delegated signing only)
       description: |
-        In delegated signing mode, the instructing party receives an unsigned
-        transaction in the `POST /instruction` response, signs it with their
-        private key, and submits the signed transaction here for broadcast.
+        In delegated signing mode, the instructing party receives either an
+        unsigned transaction or a compact signing hash from the
+        `POST /instruction` response (depending on `signing_payload_format`),
+        signs it with their private key, and submits the signature here for
+        broadcast.
 
-        The VASP validates the signature, broadcasts to the network, and begins
-        monitoring for confirmation. Status transitions to `BROADCAST` on acceptance.
+        The submission body is one of:
 
-        **Nonce note:** The instructing party must ensure the nonce used in signing
-        matches the nonce allocated by the VASP in the unsigned transaction response.
-        Using a different nonce will cause signature validation failure.
+        - `SignedTransactionSubmission` — full signed transaction in chain
+          wire format (response to a full-unsigned-transaction payload)
+        - `SignedHashSubmission` — signature over the precomputed hash, with
+          back-reference to the instruction (response to a compact signing
+          hash payload). The VASP combines the signature with the unsigned
+          transaction it stored at instruction creation time and broadcasts.
+
+        The VASP validates the signature, broadcasts to the network, and
+        begins monitoring for confirmation. Status transitions to `BROADCAST`
+        on acceptance.
+
+        **Nonce note:** The instructing party must ensure the nonce used in
+        signing matches the nonce allocated by the VASP in the unsigned
+        transaction or signing hash payload. Using a different nonce will
+        cause signature validation failure.
       parameters:
         - name: instructionId
           in: path
@@ -557,7 +718,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SignedTransactionSubmission'
+              oneOf:
+                - $ref: '#/components/schemas/SignedTransactionSubmission'
+                - $ref: '#/components/schemas/SignedHashSubmission'
       responses:
         '200':
           description: Signed transaction accepted and broadcast
@@ -573,6 +736,251 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /instruction/{instructionId}/return:
+    post:
+      tags: [Returns and Reversals]
+      operationId: returnInstruction
+      summary: Initiate a payment return as a compensating on-chain transaction (pacs.004 analogue)
+      description: |
+        Initiated by the receiving party (creditor or creditor agent / VASP) to
+        return funds from a previously settled instruction to the original sender.
+        Produces a new compensating on-chain transaction in the opposite direction,
+        linked to the original by `original_instruction_id`, `original_uetr`, and
+        `original_transaction_hash`.
+
+        This endpoint is the pacs.crypto analogue of ISO 20022 pacs.004
+        (PaymentReturn), adapted for the on-chain reality that the original
+        transaction cannot be unwound — only compensated.
+
+        **Prerequisites:**
+        - The original instruction must be in status `FINAL` (returns of
+          pre-final instructions should use `DELETE /instruction/{instructionId}`).
+        - The party initiating the return must hold or control the destination
+          wallet of the original transaction (i.e. must be in a position to
+          actually send the funds back).
+        - The same Travel Rule data exchange applies as for any new payment.
+        - A valid credential attestation reference (where required by the
+          original transaction's regulatory regime) applies to the compensating
+          transaction.
+
+        **Lifecycle:**
+        The new compensating instruction enters its own lifecycle starting at
+        status `PENDING` and proceeds through the standard instruction flow.
+        The original instruction's record is annotated with a derived flag
+        `returned: true` and a reference to the compensating instruction's UUID,
+        but its lifecycle status remains `FINAL` — because on-chain, the
+        original transaction did achieve final settlement and that fact does
+        not change.
+      parameters:
+        - name: instructionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the original (FINAL) instruction being returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnRequest'
+            examples:
+              wrong_address:
+                $ref: '#/components/examples/Example_Return_WrongAddress'
+              cancellation_request:
+                $ref: '#/components/examples/Example_Return_Cancellation'
+              regulatory:
+                $ref: '#/components/examples/Example_Return_Regulatory'
+      responses:
+        '202':
+          description: |
+            Compensating instruction accepted and entering the standard
+            instruction lifecycle. The response contains the new instruction's
+            UUID and initial status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensatingInstructionResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            Original instruction is not in a state where a return can be
+            initiated. Common cases:
+            - `INSTRUCTION_NOT_FINAL` — the original is still in pre-final
+              status; use `DELETE /instruction/{id}` instead
+            - `ALREADY_RETURNED` — a compensating transaction has already been
+              issued for this original
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_final:
+                  value:
+                    error_code: INSTRUCTION_NOT_FINAL
+                    message: Original instruction is not yet FINAL — cannot return
+                    instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
+                    status: CONFIRMING
+                already_returned:
+                  value:
+                    error_code: ALREADY_RETURNED
+                    message: A compensating transaction has already been issued
+                    instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
+                    compensating_instruction_id: 9a8b7c6d-5e4f-3210-fedc-ba9876543210
+
+  /instruction/{instructionId}/reverse:
+    post:
+      tags: [Returns and Reversals]
+      operationId: reverseInstruction
+      summary: Initiate a payment reversal as a compensating on-chain transaction (pacs.007 analogue)
+      description: |
+        Initiated by the sending party (debtor or debtor agent) to reverse a
+        previously settled instruction. Produces, after receiver consent, a new
+        compensating on-chain transaction in the opposite direction, linked to
+        the original by `original_instruction_id`, `original_uetr`, and
+        `original_transaction_hash`.
+
+        This endpoint is the pacs.crypto analogue of ISO 20022 pacs.007
+        (FIToFIPaymentReversal), adapted for the on-chain reality that the
+        original transaction cannot be unwound — only compensated.
+
+        **Difference from `/return`:** the reversal is initiated by the sender
+        (the original debtor or debtor agent who realises after settlement that
+        the payment was wrong, fraudulent, or duplicated), not by the receiver.
+        This corresponds to the pacs.007 vs pacs.004 distinction in traditional
+        payments. The on-chain mechanism in both cases is identical (a
+        compensating transaction in the opposite direction), but the initiator,
+        the reason code set, and the responsibility for cooperation differ.
+
+        **Cooperation requirement:**
+        Because the sender does not control the destination wallet, the sender
+        cannot unilaterally produce the compensating transaction. The sender's
+        request via this endpoint is, operationally, a request to the receiving
+        VASP (and through it, to the holder of the destination wallet) to issue
+        a return. If the receiver cooperates, the receiving VASP issues the
+        compensating transaction on its side. The endpoint records the request,
+        generates a request identifier, and tracks the receiver's response.
+
+        **Lifecycle:**
+        Reversal requests have a separate lifecycle distinct from the
+        compensating transaction itself:
+
+        | Reversal request status | Description |
+        |---|---|
+        | `REQUESTED` | Reversal request submitted by sender; awaiting receiver response |
+        | `ACCEPTED` | Receiver has accepted; compensating transaction is being issued |
+        | `REJECTED` | Receiver has declined to issue the compensating transaction |
+        | `COMPLETED` | Compensating transaction has reached `FINAL` status |
+        | `WITHDRAWN` | Sender has withdrawn the request before receiver response |
+
+        Once `ACCEPTED`, the receiving VASP issues the compensating instruction
+        (which then has its own standard instruction lifecycle). The reversal
+        request transitions to `COMPLETED` when the compensating transaction
+        reaches `FINAL`.
+
+        **Status updates are pushed, not polled.** The receiving VASP MUST
+        push `ReversalStatusUpdate` notifications to the sender at every
+        status transition and at compensating-transaction lifecycle progression
+        (see "Reversal status push notification" in the description block).
+        The `webhook_url` field on `ReversalRequest` lets the sender direct
+        push notifications per request; otherwise notifications go to the
+        URL agreed bilaterally between the two VASPs.
+
+        `GET /instruction/{instructionId}/reversal-status` remains available
+        as a fallback for missed pushes, audit reconciliation, and explicit
+        lookups, but should not be relied on as the primary status mechanism.
+      parameters:
+        - name: instructionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the original (FINAL) instruction being reversed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReversalRequest'
+            examples:
+              fraud:
+                $ref: '#/components/examples/Example_Reversal_Fraud'
+              duplicate:
+                $ref: '#/components/examples/Example_Reversal_Duplicate'
+              technical:
+                $ref: '#/components/examples/Example_Reversal_Technical'
+      responses:
+        '202':
+          description: |
+            Reversal request accepted and forwarded to the receiving VASP.
+            The response contains the reversal request's identifier and
+            initial status (`REQUESTED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReversalRequestResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            Original instruction is not in a state where a reversal can be
+            requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /instruction/{instructionId}/reversal-status:
+    get:
+      tags: [Returns and Reversals]
+      operationId: getReversalStatus
+      summary: Retrieve current reversal request status (fallback to push notification)
+      description: |
+        Returns the current status of a reversal request previously submitted
+        via `POST /instruction/{id}/reverse`.
+
+        **This endpoint is a fallback**, not the primary status mechanism.
+        Receiving VASPs are expected to push `ReversalStatusUpdate` notifications
+        actively when the request status changes or the compensating
+        transaction's lifecycle progresses (see "Reversal status push notification"
+        in the description block).
+
+        Use this GET endpoint for: missed push notifications, audit and
+        reconciliation queries, recovering state after a callback endpoint
+        outage, periodic consistency checks, or explicit lookups during dispute
+        resolution. Do not use it as a substitute for receiving push updates.
+      parameters:
+        - name: instructionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reversal request record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReversalRequestStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /instruction/search:
     get:
@@ -681,7 +1089,7 @@ components:
       type: string
       description: |
         Lifecycle status of a blockchain payment instruction.
-        Analogous to ISO 20022 pacs.002 status codes.
+        Analogous to ISO 20022 pacs.002 status codes, with crypto-specific additions.
 
         | Status | Description |
         |---|---|
@@ -695,6 +1103,16 @@ components:
         | `EXPIRED` | Instruction lapsed after `expiry_date_time` without execution |
         | `SLIPPAGE_EXCEEDED` | Rejected — actual slippage exceeded `maximum_slippage_rate` |
         | `RAMP_FAILED` | On/off-ramp execution failed — see `failure_reason` |
+        | `RETURNED` | Original transaction had a compensating return issued (derived flag) |
+        | `REVERSED` | Original transaction had a compensating reversal issued (derived flag) |
+
+        Note on `RETURNED` and `REVERSED`: these are **derived states**, not
+        lifecycle states. A returned or reversed instruction's underlying on-chain
+        transaction did achieve `FINAL` — the chain itself does not forget it. The
+        derived flag indicates that a compensating transaction (linked via
+        `compensating_instruction_id`) has been issued in the opposite direction.
+        The compensating transaction has its own independent lifecycle, also
+        tracked through this enum.
       enum:
         - PENDING
         - QUOTED
@@ -706,267 +1124,8 @@ components:
         - EXPIRED
         - SLIPPAGE_EXCEEDED
         - RAMP_FAILED
-
-    ISOTransactionStatus:
-      type: string
-      description: |
-        ISO 20022 pacs.002 `TransactionIndividualStatus1Code` (TxSts) analogue.
-        Primary status code for bank-side ISO-aligned consumers — the code a
-        bank treasury system can feed into its existing pacs.002 processing
-        pipeline without transformation.
-
-        Dual-layer design: this field carries the standardised ISO status; the
-        `blockchain_status` field (InstructionStatus) carries the blockchain-
-        granular lifecycle detail. The mapping between the two is deterministic
-        and documented below.
-
-        | ISO code | pacs.002 meaning | Blockchain mapping |
-        |---|---|---|
-        | `ACTC` | AcceptedTechnicalValidation — syntactically / semantically valid | Internal validation only; typically not surfaced as a terminal status |
-        | `ACSP` | AcceptedSettlementInProcess — accepted, settlement under way | `BROADCAST`, `CONFIRMING` |
-        | `ACSC` | AcceptedSettlementCompleted — settlement completed | `FINAL` |
-        | `ACCC` | AcceptedSettlementCompletedCreditorAccount — settlement confirmed at creditor account | Use where the VASP has confirmed credit to the creditor wallet beyond on-chain finality (e.g. custodial sub-account credited) |
-        | `ACWC` | AcceptedWithChange — accepted but with change to original terms | Post-slippage entries where executed amount differs from instructed amount within tolerance |
-        | `PDNG` | Pending — under process | `PENDING`, `QUOTED` |
-        | `RJCT` | Rejected — not processed | `FAILED`, `EXPIRED`, `CANCELLED`, `SLIPPAGE_EXCEEDED`, `RAMP_FAILED` |
-        | `CANC` | Cancelled | Use when the instruction is explicitly cancelled by the instructing party (vs expired or failed) |
-
-        Implementers may use `ACSC` for most FINAL entries and `ACCC` only when
-        creditor-account-level crediting is an additional distinguishable event
-        in the VASP operation.
-      enum:
-        - ACTC
-        - ACSP
-        - ACSC
-        - ACCC
-        - ACWC
-        - PDNG
-        - RJCT
-        - CANC
-
-    ISOStatusReasonCode:
-      type: string
-      description: |
-        ISO 20022 `ExternalStatusReason1Code` analogue with pacs.crypto
-        blockchain-specific extensions. Populated alongside `iso_status` when
-        `iso_status` is `RJCT`, `ACWC`, or `CANC`.
-
-        **Standard ISO codes reused from `ExternalStatusReason1Code`:**
-
-        | Code | Meaning |
-        |---|---|
-        | `AC01` | IncorrectAccountNumber — destination wallet address is invalid or unresolvable |
-        | `AC03` | InvalidCreditorAccountNumber — creditor wallet format invalid for the specified chain |
-        | `AC04` | ClosedAccountNumber — destination wallet is on a deprecated or frozen chain contract |
-        | `AG01` | TransactionForbidden — instruction prohibited by policy or bilateral agreement |
-        | `AM04` | InsufficientFunds — insufficient token balance at debtor wallet |
-        | `AM05` | Duplication — duplicate `end_to_end_identification` received |
-        | `BE01` | InconsistentWithEndCustomer — party identification data inconsistent with KYC record |
-        | `CUST` | RequestedByCustomer — cancellation or change requested by the instructing customer |
-        | `NARR` | Narrative — reason provided in `iso_status_reason_text` |
-
-        **Blockchain-specific proprietary extensions (pacs.crypto namespace):**
-
-        | Code | Meaning |
-        |---|---|
-        | `SLIPPAGE_EXCEEDED` | DEX slippage exceeded `maximum_slippage_rate` tolerance |
-        | `GAS_PRICE_EXCEEDED` | Gas price at execution time exceeded policy cap |
-        | `CHAIN_REORG` | Chain reorganisation invalidated a previously final transaction |
-        | `RAMP_FAILED` | On/off-ramp leg execution failed |
-        | `BRIDGE_FAILED` | Bridge protocol execution failed |
-        | `NONCE_CONFLICT` | Allocated nonce was consumed by another transaction (delegated signing) |
-        | `INSUFFICIENT_ONCHAIN_BALANCE` | Debtor wallet balance insufficient at broadcast time |
-        | `EXPIRY_EXCEEDED` | Instruction exceeded `expiry_date_time` without execution |
-        | `ATTESTATION_INVALID` | `credential_attestation` failed verification against ERC-3643 trusted attester registry |
-        | `ATTESTATION_EXPIRED` | `credential_attestation` has passed its `expiry_date_time` |
-      example: "SLIPPAGE_EXCEEDED"
-
-    ISOStatusOriginator:
-      type: object
-      description: |
-        Identifies the agent that issued the status. Follows pacs.002
-        `StatusOriginator` concept. Useful when multiple parties in the
-        execution chain contribute status (VASP, crypto agent, bridge provider).
-      properties:
-        name:
-          type: string
-          maxLength: 140
-        lei:
-          $ref: '#/components/schemas/LEIIdentifier'
-        bic:
-          $ref: '#/components/schemas/BICIdentifier'
-        role:
-          type: string
-          enum: [VASP, CRYPTO_AGENT, BRIDGE_PROVIDER, RAMP_PROVIDER, CUSTODIAN, OTHER]
-          description: Functional role of the status originator in the execution chain.
-
-    StatusHistoryEntry:
-      type: object
-      description: |
-        A single status transition in the instruction lifecycle. The sequence
-        of entries forms a log of all status changes, enabling audit and
-        reconciliation. Mirrors the practice of chaining multiple pacs.002
-        status reports for a single payment.
-      required: [iso_status, blockchain_status, changed_at]
-      properties:
-        iso_status:
-          $ref: '#/components/schemas/ISOTransactionStatus'
-        blockchain_status:
-          $ref: '#/components/schemas/InstructionStatus'
-        iso_status_reason_code:
-          $ref: '#/components/schemas/ISOStatusReasonCode'
-        iso_status_reason_text:
-          type: string
-          maxLength: 500
-          description: Human-readable elaboration of the reason code.
-        status_originator:
-          $ref: '#/components/schemas/ISOStatusOriginator'
-        changed_at:
-          type: string
-          format: date-time
-          description: Timestamp of the status transition.
-        transaction_hash:
-          type: string
-          maxLength: 200
-          description: |
-            On-chain transaction hash, if relevant to this status transition
-            (populated on `BROADCAST`, `CONFIRMING`, `FINAL`).
-        confirmation_depth:
-          type: integer
-          description: Confirmation depth at the time of this entry, if applicable.
-
-    CancellationReasonCode:
-      type: string
-      description: |
-        Cancellation reason code. Follows ISO 20022 `ExternalCancellationReason1Code`
-        for alignment with camt.056 `PaymentCancellationRequest` semantics.
-
-        | Code | Meaning |
-        |---|---|
-        | `CUST` | RequestedByCustomer — cancellation initiated at customer request |
-        | `DUPL` | Duplicate payment — instruction was a duplicate of another |
-        | `AM09` | WrongAmount — incorrect amount was instructed |
-        | `TECH` | Technical problem — technical issue prevented processing |
-        | `FRAD` | Fraudulent origin — suspected fraud |
-        | `UPAY` | UndueAmount — amount not due |
-        | `AC03` | InvalidCreditorAccountNumber — creditor wallet format invalid |
-        | `AGNT` | IncorrectAgent — wrong VASP/agent specified |
-        | `CURR` | IncorrectCurrency — wrong currency/token |
-        | `NARR` | Narrative — reason provided in `reason_text` |
-      enum:
-        - CUST
-        - DUPL
-        - AM09
-        - TECH
-        - FRAD
-        - UPAY
-        - AC03
-        - AGNT
-        - CURR
-        - NARR
-      example: "CUST"
-
-    CancellationRequest:
-      type: object
-      description: |
-        Structured cancellation request body. Follows camt.056
-        `FIToFIPaymentCancellationRequest` semantics.
-
-        The DELETE endpoint accepts this body optionally — a DELETE with no
-        body cancels the instruction with an implicit `CUST` reason. When
-        reason codes matter for audit (regulated contexts, disputed instructions,
-        etc.), populate the body.
-      properties:
-        reason_code:
-          $ref: '#/components/schemas/CancellationReasonCode'
-        reason_text:
-          type: string
-          maxLength: 500
-          description: |
-            Human-readable cancellation reason. Required when `reason_code = NARR`;
-            optional elaboration for any other code.
-        originator:
-          $ref: '#/components/schemas/ISOStatusOriginator'
-          description: |
-            Party initiating the cancellation. Follows camt.056
-            `Assigner` concept. Populate when the cancellation is issued
-            on behalf of a different entity than the original instructing party.
-
-    PaymentStatusRequest:
-      type: object
-      description: |
-        Request body for `POST /instruction/{instructionId}/status-request`.
-        Analogue of ISO 20022 pacs.028 `FIToFIPaymentStatusRequest`.
-
-        Used when the instructing party wishes to proactively query the current
-        status of an instruction — typically when an expected status update has
-        not arrived within a reasonable time. The VASP responds with the same
-        `InstructionStatusResponse` schema returned by `GET /instruction/{instructionId}`,
-        reflecting a freshly evaluated on-chain state where relevant.
-
-        In traditional payments, pacs.028 is answered by pacs.002. Here, the
-        `InstructionStatusResponse` carries both the pacs.002-aligned
-        `iso_status` and the blockchain-granular `status`, so a single response
-        serves both consumers.
-      properties:
-        request_id:
-          $ref: '#/components/schemas/UUIDv4'
-          description: |
-            Unique identifier for this status request, assigned by the
-            requesting party. Echoed in the response for correlation.
-        request_reason:
-          type: string
-          maxLength: 500
-          description: |
-            Optional free-text reason for the status request. Useful in
-            operational troubleshooting (e.g. "no status received since broadcast_at + 2h").
-        refresh_from_chain:
-          type: boolean
-          default: true
-          description: |
-            If `true` (default), the VASP re-queries the chain for current
-            confirmation depth and finality state before responding. If
-            `false`, the VASP returns the last cached status. Set `false`
-            for low-cost polling where the chain query is unnecessary.
-
-    CredentialAttestation:
-      type: object
-      description: |
-        Reference to an on-chain EAS (Ethereum Attestation Service) compliance
-        attestation. Links an instruction to an on-chain identity or compliance
-        proof for regulated tokenised asset transfers (e.g. ERC-3643 tokens).
-
-        This field is a reference only — parties must verify the attestation
-        on-chain against the relevant ERC-3643 token trusted attester registry.
-        Presence in an instruction record does not constitute a compliance
-        clearance. Omit for standard stablecoin and native token transfers.
-        See the pacs.crypto README Ecosystem section for full context.
-      required: [schema_uid, attestation_uid, attester, chain_dli]
-      properties:
-        schema_uid:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{64}$'
-          description: EAS SchemaRegistry UID — 32-byte hex identifying the attestation schema.
-        attestation_uid:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{64}$'
-          description: UID of the specific EAS attestation. Resolvable via https://attest.org.
-        attester:
-          type: string
-          maxLength: 130
-          description: |
-            Wallet address of the institution that issued the attestation.
-            Cross-reference against the ERC-3643 token trusted attester registry.
-        chain_dli:
-          type: string
-          pattern: '^[A-Z0-9]{9}$'
-          description: |
-            ISO 24165-2 DLI of the chain on which the attestation is published.
-            Bare 9-character value; no DLID/ prefix.
-        expiry_date_time:
-          type: string
-          format: date-time
-          description: Attestation expiry if set. An expired attestation must be treated as invalid.
+        - RETURNED
+        - REVERSED
 
     FinalityStatus:
       type: string
@@ -1010,9 +1169,21 @@ components:
       description: |
         Identifies the signing arrangement for this instruction.
         Must be agreed bilaterally between instructing party and VASP.
+
+        - `FULL_CUSTODY` — VASP holds the private key, signs, and broadcasts on
+          behalf of the instructing party.
+        - `DELEGATED_SIGNING` — instructing party holds the private key (typically
+          in an HSM) and signs after the VASP returns the unsigned transaction or
+          signing hash. The VASP broadcasts the signed transaction.
+        - `SELF_CUSTODY` — the originator holds the key and broadcasts directly
+          to the chain without VASP involvement on the signing side. Used when
+          the API records a transaction the originator has executed itself, for
+          partner-VASP reconciliation or reporting. In this case `debtor_agent`
+          is omitted and the VASP does not act as a signing party.
       enum:
         - FULL_CUSTODY
         - DELEGATED_SIGNING
+        - SELF_CUSTODY
 
     ChargeBearerCode:
       type: string
@@ -1216,24 +1387,6 @@ components:
         **Token issuer:** `token_issuer` provides the name and LEI/BIC of the issuing
         entity (e.g. Circle Internet Financial for USDC, Tether Ltd for USDT).
         Important for regulated stablecoins under MiCA and equivalent frameworks.
-
-        **Compatibility note — Travel Rule API field names:**
-        The Travel Rule API (Spec 1) uses a slightly different TokenIdentification
-        field naming, reflecting its earlier iteration: `dti` (instead of `token_dti`),
-        `contract_chain_id` / `ticker_chain_id` (instead of a single `chain_dli`),
-        and `ticker` (instead of `token_symbol`). The semantics are identical; only
-        the field names differ. The Instruction API and Account Reporting API use
-        the harmonised naming introduced here. A single-line mapping is sufficient
-        for implementers carrying token identification across the two APIs:
-
-        | Instruction / Reporting | Travel Rule |
-        |---|---|
-        | `token_dti` | `dti` |
-        | `chain_dli` | `contract_chain_id` or `ticker_chain_id` |
-        | `token_symbol` | `ticker` |
-
-        The Travel Rule API may be aligned to the harmonised convention in a
-        future major version.
       properties:
         token_dti:
           type: string
@@ -1340,9 +1493,7 @@ components:
           properties:
             amount:
               type: string
-              maxLength: 37
-              pattern: '^\d{1,18}(\.\d{1,18})?$'
-              description: Native token amount as decimal string (up to 18 decimal places).
+              maxLength: 30
             currency:
               type: string
               maxLength: 20
@@ -1516,6 +1667,29 @@ components:
           example: "X9J9XDMTD"
         custody_model:
           $ref: '#/components/schemas/CustodyModel'
+        signing_payload_format:
+          type: string
+          enum: [FULL_TRANSACTION, COMPACT_HASH]
+          default: FULL_TRANSACTION
+          description: |
+            Relevant only for `custody_model = DELEGATED_SIGNING`. Selects
+            which payload format the VASP returns for the instructing party
+            to sign.
+
+            - `FULL_TRANSACTION` (default) — VASP returns the complete
+              unsigned blockchain transaction in wire format. The signing
+              service constructs the hash internally and signs with full
+              visibility into the transaction content. Use when the signing
+              infrastructure natively supports the chain's transaction
+              format. Returns `unsigned_transaction` in the response.
+            - `COMPACT_HASH` — VASP returns a precomputed signing hash plus
+              cross-check fields (signed by the VASP for non-repudiation).
+              Use when the signing service signs opaque hashes rather than
+              chain-specific transactions (MPC threshold signers, generic
+              hardware wallets, air-gapped signers). Returns
+              `signing_hash_payload` in the response. See "Two delegated
+              signing payload formats" in the description block for the
+              security implications.
         maximum_slippage_rate:
           type: string
           maxLength: 19
@@ -1660,17 +1834,26 @@ components:
         Modelled on `CreditTransferTransaction73` from pacs.008.001.14 with
         pacs.crypto extensions for blockchain settlement.
 
-        **Mandatory fields** follow pacs.008 mandatory elements:
+        **Mandatory fields** follow pacs.008 mandatory elements minus the
+        agents (see flow-variants note below):
         `payment_identification`, `interbank_settlement_amount`, `charge_bearer`,
-        `debtor`, `debtor_agent`, `creditor_agent`, `creditor`, plus
-        `blockchain_instruction` (pacs.crypto extension).
+        `debtor`, `creditor`, plus `blockchain_instruction` (pacs.crypto
+        extension).
+
+        **`debtor_agent` and `creditor_agent` are optional from v1.3.** They
+        are present in the canonical bank-to-VASP and corporate-to-bank flows
+        (where the regulated agent on each side is what processes the
+        instruction) and omitted in corporate-direct flows. See the
+        "Flow variants" section of this specification for which configurations
+        omit which agents. The `debtor` and `creditor` parties themselves
+        remain mandatory in all flow variants because the FATF Recommendation 16
+        identity obligation attaches to the originator and beneficiary parties
+        regardless of agent presence.
       required:
         - payment_identification
         - interbank_settlement_amount
         - charge_bearer
         - debtor
-        - debtor_agent
-        - creditor_agent
         - creditor
         - blockchain_instruction
       properties:
@@ -1767,19 +1950,12 @@ components:
             instructing agent and the VASP. Follows `ActiveCurrencyAndAmount`.
             Where `currency` = XXX (no ISO 4217 code), this is a crypto-denominated
             instruction and `instructed_amount` carries the fiat equivalent.
-
-            **Precision:** maxLength extended to 36 (18 integer + 18 fractional
-            digits) to accommodate full-precision 18-decimal tokens such as ETH.
-            Expressed as a decimal string to avoid IEEE 754 floating-point loss.
           required: [amount, currency]
           properties:
             amount:
               type: string
-              maxLength: 37
-              pattern: '^\d{1,18}(\.\d{1,18})?$'
-              description: |
-                Settlement amount as decimal string. Up to 18 integer and 18
-                fractional digits for full-precision token amounts.
+              maxLength: 30
+              description: Settlement amount. For tokens, may carry up to 18 decimal places.
             currency:
               type: string
               maxLength: 10
@@ -1792,12 +1968,10 @@ components:
             Follows `ActiveOrHistoricCurrencyAndAmount` from pacs.008.001.14.
             Use when currency differs from `interbank_settlement_amount` (e.g. fiat
             equivalent of a crypto instruction, or onramp source amount).
-            Precision extended to 36 digits — see interbank_settlement_amount for rationale.
           properties:
             amount:
               type: string
-              maxLength: 37
-              pattern: '^\d{1,18}(\.\d{1,18})?$'
+              maxLength: 30
             currency:
               type: string
               pattern: '^[A-Z]{3}$'
@@ -1874,7 +2048,6 @@ components:
             `CashAccount40`. Wallet address is carried in `proxy/EWAL`:
             - `proxy/type/code = EWAL` (Electronic Wallet, ExternalProxyAccountType1Code)
             - `proxy/identification` = the blockchain wallet address string
-            - `type/proprietary = DIGT` indicates a digital asset wallet account
 
             For exchange/custodial accounts, `identification/other` may additionally
             carry an internal account or sub-account reference alongside the proxy.
@@ -1882,16 +2055,29 @@ components:
         debtor_agent:
           $ref: '#/components/schemas/AgentIdentification'
           description: |
-            Financial institution servicing the debtor's account. Mandatory.
-            Follows pacs.008 `DebtorAgent`. For a bank sending on behalf of its
-            client, this is the bank.
+            Financial institution servicing the debtor's account. Follows pacs.008
+            `DebtorAgent`. For a bank sending on behalf of its client, this is
+            the bank.
+
+            **Optional from v1.3.** Omit in corporate-direct flows where the
+            debtor (corporate treasury) instructs a VASP without an
+            intermediating bank, or in self-custody flows where the debtor
+            signs and broadcasts the on-chain transaction itself. The `debtor`
+            party remains mandatory in all flow variants. See the Flow variants
+            section of this specification.
 
         creditor_agent:
           $ref: '#/components/schemas/AgentIdentification'
           description: |
-            VASP or financial institution servicing the creditor. Mandatory.
-            Follows pacs.008 `CreditorAgent`. This is the entity receiving the
-            instruction and executing the blockchain transfer.
+            VASP or financial institution servicing the creditor. Follows pacs.008
+            `CreditorAgent`. In the canonical case this is the entity receiving
+            the instruction and executing the blockchain transfer.
+
+            **Optional from v1.3.** Omit when the creditor self-custodies — the
+            receiving wallet is controlled directly by the beneficiary party
+            rather than by a VASP acting on their behalf. The `creditor` party
+            remains mandatory in all flow variants. See the Flow variants
+            section of this specification.
 
         debtor_crypto_agent:
           $ref: '#/components/schemas/AgentIdentification'
@@ -1923,7 +2109,6 @@ components:
             `CashAccount40`. Wallet address is carried in `proxy/EWAL`:
             - `proxy/type/code = EWAL` (Electronic Wallet, ExternalProxyAccountType1Code)
             - `proxy/identification` = the blockchain wallet address string
-            - `type/proprietary = DIGT` indicates a digital asset wallet account
 
             For exchange/custodial accounts, `identification/other` may additionally
             carry an internal account or sub-account reference alongside the proxy.
@@ -2007,22 +2192,6 @@ components:
         blockchain_instruction:
           $ref: '#/components/schemas/BlockchainInstruction'
 
-        # ── ON-CHAIN CREDENTIAL ATTESTATION (EXTENSION) ──────────────────────
-        credential_attestation:
-          $ref: '#/components/schemas/CredentialAttestation'
-          description: |
-            Optional reference to an EAS on-chain compliance attestation
-            submitted with this instruction. Relevant for ERC-3643 regulated
-            token transfers where smart-contract-enforced transfer eligibility
-            requires a verifiable identity proof on-chain.
-
-            Populating this field on submission allows the VASP to verify the
-            attestation pre-execution against the relevant ERC-3643 token
-            trusted attester registry. The same attestation reference is
-            echoed in the InstructionStatusResponse for audit completeness.
-            Omit for standard stablecoin and native token transfers.
-            See the pacs.crypto README Ecosystem section.
-
     # ── RESPONSE SCHEMAS ──────────────────────────────────────────────────────
 
     InstructionResponse:
@@ -2042,9 +2211,14 @@ components:
         unsigned_transaction:
           type: object
           description: |
-            Unsigned transaction for DELEGATED_SIGNING mode only.
+            Unsigned transaction for `DELEGATED_SIGNING` mode with
+            `signing_payload_format = FULL_TRANSACTION` (default).
             The instructing party signs this and submits via
             `POST /instruction/{instructionId}/signed-transaction`.
+
+            Mutually exclusive with `signing_hash_payload`. Only one of the
+            two is populated, depending on the `signing_payload_format`
+            requested in the instruction.
           properties:
             transaction_format:
               type: string
@@ -2088,6 +2262,20 @@ components:
             chain_id:
               type: integer
               description: EVM chain ID for replay protection.
+        signing_hash_payload:
+          $ref: '#/components/schemas/SigningHashPayload'
+          description: |
+            Compact signing hash payload for `DELEGATED_SIGNING` mode with
+            `signing_payload_format = COMPACT_HASH`. The instructing party
+            verifies the cross-check fields against its record of the
+            original instruction, then submits the hash to its signing
+            service. The resulting signature is submitted via
+            `POST /instruction/{instructionId}/signed-transaction` as a
+            `SignedHashSubmission`.
+
+            Mutually exclusive with `unsigned_transaction`. Only one of the
+            two is populated, depending on the `signing_payload_format`
+            requested in the instruction.
         fee_estimate:
           $ref: '#/components/schemas/FeeEstimate'
         expiry_date_time:
@@ -2140,18 +2328,12 @@ components:
           $ref: '#/components/schemas/FinalityStatus'
         actual_amount_transferred:
           type: string
-          maxLength: 37
-          pattern: '^\d{1,18}(\.\d{1,18})?$'
-          description: |
-            Actual token amount transferred on-chain (post-slippage / post-ramp).
-            Up to 18 integer and 18 fractional digits for full-precision tokens.
+          maxLength: 30
+          description: Actual token amount transferred on-chain (post-slippage / post-ramp).
         actual_gas_cost_native:
           type: string
-          maxLength: 37
-          pattern: '^\d{1,18}(\.\d{1,18})?$'
-          description: |
-            Actual gas cost in native token units. Up to 18 fractional digits
-            for chains like Ethereum where gas is denominated in ETH (18 decimals).
+          maxLength: 30
+          description: Actual gas cost in native token.
         actual_gas_cost_fiat:
           type: object
           properties:
@@ -2168,20 +2350,7 @@ components:
 
     InstructionStatusResponse:
       type: object
-      description: |
-        Full instruction status response including on-chain settlement data
-        and ISO 20022 pacs.002-aligned status fields.
-
-        **Dual-layer status:** This response carries two parallel status views:
-        - `iso_status` + `iso_status_reason_code` — pacs.002 `TxSts` and
-          `StsRsnInf` analogue, for ISO 20022 consumers (bank treasury systems,
-          pacs.002 processing pipelines)
-        - `blockchain_status` — the pacs.crypto `InstructionStatus` enum, for
-          operational consumers requiring blockchain-granular lifecycle detail
-
-        Both are always populated and the mapping between them is deterministic
-        (see `ISOTransactionStatus` description). The response is the answer
-        to both `GET /instruction/{instructionId}` and `POST /instruction/{instructionId}/status-request`.
+      description: Full instruction status response including on-chain settlement data.
       properties:
         instruction_id:
           $ref: '#/components/schemas/UUIDv4'
@@ -2189,54 +2358,10 @@ components:
           $ref: '#/components/schemas/UUIDv4'
         status:
           $ref: '#/components/schemas/InstructionStatus'
-          description: |
-            Blockchain-granular status (pacs.crypto extension). Alias for
-            `blockchain_status`; retained for backwards compatibility.
-            New consumers should read `blockchain_status` explicitly.
-        blockchain_status:
-          $ref: '#/components/schemas/InstructionStatus'
-          description: |
-            Blockchain-granular lifecycle status. Always populated. Same
-            value as `status`. Preferred field for new consumers.
-        iso_status:
-          $ref: '#/components/schemas/ISOTransactionStatus'
-          description: |
-            pacs.002-aligned status code. Always populated. Primary field for
-            ISO 20022 consumers.
-        iso_status_reason_code:
-          $ref: '#/components/schemas/ISOStatusReasonCode'
-          description: |
-            pacs.002 reason code. Populated when `iso_status` is `RJCT`,
-            `ACWC`, or `CANC`; may be populated alongside `PDNG` where
-            relevant (e.g. `CHAIN_REORG` re-pending).
-        iso_status_reason_text:
-          type: string
-          maxLength: 500
-          description: |
-            Human-readable elaboration of the reason code. Required when
-            `iso_status_reason_code = NARR`.
-        status_originator:
-          $ref: '#/components/schemas/ISOStatusOriginator'
-          description: |
-            Party that issued the current status. Useful when execution is
-            chained (VASP → crypto agent → bridge provider) and different
-            parties contribute status updates.
-        status_history:
-          type: array
-          description: |
-            Ordered log of status transitions since instruction submission.
-            Oldest-first. Each entry captures one status change with its
-            originator, reason, and on-chain references where applicable.
-            Enables complete audit reconstruction without polling-history aggregation.
-          items:
-            $ref: '#/components/schemas/StatusHistoryEntry'
         failure_reason:
           type: string
           maxLength: 500
-          description: |
-            Legacy free-text failure reason. Retained for backwards
-            compatibility. New consumers should use `iso_status_reason_code`
-            and `iso_status_reason_text`.
+          description: Human-readable failure reason for FAILED, SLIPPAGE_EXCEEDED, RAMP_FAILED, EXPIRED statuses.
         payment_identification:
           $ref: '#/components/schemas/PaymentIdentification'
         debtor:
@@ -2256,12 +2381,6 @@ components:
           $ref: '#/components/schemas/OnChainSettlement'
         travel_rule_record_id:
           $ref: '#/components/schemas/UUIDv4'
-        credential_attestation:
-          $ref: '#/components/schemas/CredentialAttestation'
-          description: |
-            Optional reference to an EAS on-chain compliance attestation
-            associated with this instruction. Relevant for ERC-3643 regulated
-            token transfers. See the pacs.crypto README Ecosystem section.
         created_at:
           type: string
           format: date-time
@@ -2271,9 +2390,38 @@ components:
         expiry_date_time:
           type: string
           format: date-time
+        returned:
+          type: boolean
+          description: |
+            True if a compensating return transaction has been issued for this
+            instruction. The returned instruction itself remains `FINAL` on-chain;
+            this flag indicates a compensating transaction exists.
+        reversed:
+          type: boolean
+          description: |
+            True if a compensating reversal transaction has been issued for
+            this instruction.
+        compensating_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            If `returned: true` or `reversed: true`, the UUID of the
+            compensating instruction. Use `GET /instruction/{compensating_instruction_id}`
+            to retrieve its status.
+        compensation_reason_code:
+          type: string
+          description: The reason code from the compensating return or reversal request.
+        original_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            If this instruction is itself a compensating transaction (created
+            via `POST /instruction/{id}/return` or `/reverse`), the UUID of the
+            original instruction it compensates.
 
     SignedTransactionSubmission:
       type: object
+      description: |
+        Submission of a fully signed blockchain transaction. Used when the
+        instruction's `signing_payload_format = FULL_TRANSACTION` (default).
       required: [signed_transaction_data]
       properties:
         transaction_format:
@@ -2288,6 +2436,172 @@ components:
             Signed transaction data in the format specified by `transaction_format`.
             Must use the exact nonce allocated by the VASP in the unsigned
             transaction response.
+        submitted_at:
+          type: string
+          format: date-time
+
+    SigningHashPayload:
+      type: object
+      description: |
+        Compact signing payload returned by the VASP when the instruction's
+        `signing_payload_format = COMPACT_HASH`. Contains the hash that the
+        instructing party's signing service should sign, plus cross-check
+        fields that the instructing party's application layer must verify
+        against its own record of the original instruction before submitting
+        the hash to the signing service.
+
+        The whole payload is end-to-end signed by the VASP under its
+        operational signing key (separate from any chain-specific keys),
+        which converts the cross-check fields — including the amount — into
+        a non-repudiation artefact. The VASP cannot later claim that the
+        hash they presented was for a different transaction or amount.
+
+        See "Two delegated signing payload formats" in the description block
+        for the security implications of using this format and the
+        responsibility shift it entails.
+      required:
+        - instruction_id
+        - signing_hash
+        - signing_hash_algorithm
+        - chain_dli
+        - expected_recipient
+        - expected_amount
+        - vasp_signature
+      properties:
+        instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Cross-check field. The instructing party's application layer
+            must verify this matches the instruction it submitted.
+        signing_hash:
+          type: string
+          maxLength: 200
+          description: |
+            The hash to be signed (typically 32 bytes, hex-encoded). For EVM,
+            this is the keccak256 of the RLP-encoded transaction. For Bitcoin,
+            this is the SIGHASH digest. For Solana, this is the digest of the
+            transaction message. Chain-specific.
+        signing_hash_algorithm:
+          type: string
+          enum: [KECCAK256_EVM, SHA256D_BTC, ED25519_SOLANA, SHA512_XRP, OTHER]
+          description: |
+            The hash algorithm and chain context. Required so the application
+            layer knows how to verify the hash if it chooses to reconstruct
+            independently from the unsigned transaction (which it may
+            optionally request alongside the hash for additional verification).
+        chain_dli:
+          type: string
+          description: |
+            Cross-check field. ISO 24165-2 Digital Ledger Identifier of the
+            target chain. Application layer must verify this matches the
+            chain specified in the original instruction.
+        nonce:
+          type: integer
+          description: |
+            Cross-check field. The transaction nonce (or sequence number).
+            Application layer should verify this matches its expected nonce
+            sequence for the signing key.
+        expected_recipient:
+          type: string
+          description: |
+            Cross-check field. The destination wallet address from the
+            instruction. Application layer MUST verify this matches the
+            originally-submitted instruction's creditor wallet before
+            forwarding the hash to the signing service. A mismatch here is
+            the most direct indicator of a substituted hash.
+        expected_amount:
+          $ref: '#/components/schemas/Amount'
+          description: |
+            Cross-check field. The transfer amount and token from the
+            instruction. By signing this payload (see `vasp_signature`), the
+            VASP commits to this amount being what the hash represents. The
+            VASP cannot subsequently argue that the hash was for a different
+            transaction or different amount; this field is therefore both a
+            verification aid and a non-repudiation commitment.
+        valid_until:
+          type: string
+          format: date-time
+          description: |
+            Expiry timestamp for this signing payload. After this time, the
+            VASP may decline to broadcast the resulting signature (e.g.
+            because the underlying chain conditions or fee parameters have
+            changed). The instructing party should sign and submit before
+            this time.
+        vasp_signature:
+          type: object
+          description: |
+            VASP's end-to-end signature over the canonical serialisation of
+            this payload (excluding the `vasp_signature` field itself). The
+            instructing party verifies this signature using the VASP's
+            published operational signing key before treating the cross-check
+            fields as authoritative.
+          required:
+            - signature
+            - key_identifier
+            - signature_algorithm
+          properties:
+            signature:
+              type: string
+              description: Hex-encoded or base64-encoded signature.
+            key_identifier:
+              type: string
+              description: |
+                Identifier (e.g. key fingerprint, vLEI key ID) of the VASP key
+                used for the signature. Allows the instructing party to look
+                up the corresponding public key.
+            signature_algorithm:
+              type: string
+              enum: [ECDSA_P256, ECDSA_SECP256K1, ED25519, RSA_PSS_SHA256, OTHER]
+              description: Algorithm used for the VASP's signature.
+            signed_at:
+              type: string
+              format: date-time
+        full_unsigned_transaction:
+          type: string
+          description: |
+            Optional. The full unsigned transaction in wire format, included
+            if the instructing party wishes to verify the hash by independent
+            reconstruction. Marked optional because the whole point of the
+            compact format is for senders whose signing infrastructure cannot
+            consume the full transaction; including it lets sophisticated
+            application layers cross-verify the hash without imposing the
+            full-transaction format on the signer.
+
+    SignedHashSubmission:
+      type: object
+      description: |
+        Submission of a signature over a compact signing hash. Used when the
+        instruction's `signing_payload_format = COMPACT_HASH`.
+
+        The VASP combines this signature with the unsigned transaction it
+        retained at instruction creation time, then broadcasts.
+      required:
+        - instruction_id
+        - signature
+        - signature_algorithm
+      properties:
+        instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Back-reference to the instruction. Used by the VASP to look up
+            the unsigned transaction it stored at instruction creation time.
+        signature:
+          type: string
+          description: |
+            Signature over the `signing_hash` from the `SigningHashPayload`.
+            Hex-encoded or base64-encoded depending on the chain's signature
+            format conventions.
+        signature_algorithm:
+          type: string
+          enum: [ECDSA_SECP256K1, ED25519, BLS12_381, OTHER]
+          description: |
+            Signature algorithm. Must match what the chain expects.
+        signing_hash:
+          type: string
+          description: |
+            Optional echo of the hash that was signed, useful for verification
+            and audit. The VASP can verify this matches the hash it issued
+            in the original `SigningHashPayload`.
         submitted_at:
           type: string
           format: date-time
@@ -2309,58 +2623,523 @@ components:
 
     CancellationResponse:
       type: object
-      description: |
-        Response to a cancellation request. Analogue of ISO 20022 camt.029
-        `ResolutionOfInvestigation` — reports the outcome of the camt.056
-        cancellation request.
-
-        **Resolution statuses** follow camt.029 `CancellationStatusReason4`
-        semantics:
-        - `ACCR` — CancellationAccepted: the cancellation was accepted and the
-          instruction will not be executed
-        - `RJCR` — CancellationRejected: the cancellation was not possible
-          (e.g. already broadcast to chain); the instruction proceeds
-        - `PDCR` — CancellationPending: cancellation is under evaluation
-          (rare for blockchain — use when a delegated-signing transaction may
-          or may not still be prevented from broadcast)
       properties:
         instruction_id:
           $ref: '#/components/schemas/UUIDv4'
-        cancellation_resolution_status:
-          type: string
-          enum: [ACCR, RJCR, PDCR]
-          description: |
-            camt.029 resolution status code. `ACCR` means cancellation was
-            accepted; `RJCR` means it was rejected; `PDCR` means pending.
         status:
           type: string
-          enum: [CANCELLED, BROADCAST, CONFIRMING, FINAL, FAILED]
+          enum: [CANCELLED]
+        cancelled_at:
+          type: string
+          format: date-time
+
+    # ── RETURNS AND REVERSALS ────────────────────────────────────────────────
+
+    Amount:
+      type: object
+      description: |
+        Amount and currency. Inline equivalent of ISO 20022 `ActiveCurrencyAndAmount`,
+        following the spec's existing convention for amounts.
+      properties:
+        amount:
+          type: string
+          maxLength: 30
+        currency:
+          type: string
+          maxLength: 20
+          description: ISO 4217 currency code or token symbol/DTI.
+
+    ContactDetails:
+      type: object
+      description: |
+        Contact details for an institutional party, used for follow-up communication
+        on returns and reversals.
+      properties:
+        name:
+          type: string
+          maxLength: 140
+        function:
+          type: string
+          maxLength: 140
+          description: Role or function (e.g. "Fraud Operations").
+        phone:
+          type: string
+          maxLength: 35
+        email:
+          type: string
+          maxLength: 256
+
+    ReturnRequest:
+      type: object
+      description: |
+        Request to issue a compensating transaction for a previously settled
+        instruction. Modelled on pacs.004 PaymentTransaction168.
+      required:
+        - return_reason
+        - returned_amount
+      properties:
+        return_identification:
+          type: string
+          maxLength: 35
           description: |
-            Current blockchain status of the instruction after the cancellation
-            attempt. When `cancellation_resolution_status = ACCR`, this will
-            be `CANCELLED`. When `RJCR`, this reflects why the cancellation
-            failed (typically `BROADCAST` or later).
-        cancellation_reason_code:
-          $ref: '#/components/schemas/CancellationReasonCode'
+            Optional identifier assigned by the returning party for this
+            return operation, separate from the resulting compensating
+            instruction's UUID. Maps to pacs.004 `return_identification`.
+        returned_amount:
+          $ref: '#/components/schemas/Amount'
           description: |
-            Echoes the reason code from the cancellation request, for audit.
-        cancellation_reason_text:
+            Amount being returned. May be less than the original amount if
+            partial return is supported (e.g. fees deducted, partial refund).
+        compensation_amount:
+          $ref: '#/components/schemas/Amount'
+          description: |
+            Optional additional compensation paid alongside the principal
+            (e.g. interest for delayed remediation). Maps to pacs.004
+            `compensation_amount`.
+        return_reason:
+          $ref: '#/components/schemas/ReturnReason'
+        original_transaction_reference:
+          $ref: '#/components/schemas/OriginalTransactionReference'
+          description: |
+            Reference data carried from the original instruction. Optional —
+            VASPs may populate from their record of the original.
+        instruction_for_creditor:
+          type: string
+          maxLength: 210
+          description: |
+            Optional message for the original sender (now the creditor of the
+            compensating transaction) explaining the return.
+        ramp_instruction:
+          $ref: '#/components/schemas/RampInstruction'
+          description: |
+            Optional. If the compensating transfer needs to be delivered as
+            fiat (e.g. the original was an on-ramp), the ramp instructions
+            apply to the compensating leg.
+
+    ReversalRequest:
+      type: object
+      description: |
+        Request from the sending party for a compensating transaction to be
+        issued by the receiving VASP. Modelled on pacs.007 PaymentTransaction182.
+      required:
+        - reversal_reason
+        - reversed_amount
+      properties:
+        reversal_identification:
+          type: string
+          maxLength: 35
+          description: |
+            Optional identifier assigned by the requesting party. Maps to
+            pacs.007 `reversal_identification`.
+        reversed_amount:
+          $ref: '#/components/schemas/Amount'
+          description: Amount being requested for reversal.
+        compensation_amount:
+          $ref: '#/components/schemas/Amount'
+          description: Optional additional compensation requested.
+        reversal_reason:
+          $ref: '#/components/schemas/ReversalReason'
+        original_transaction_reference:
+          $ref: '#/components/schemas/OriginalTransactionReference'
+        request_narrative:
           type: string
           maxLength: 500
           description: |
-            Echoes the reason text from the cancellation request.
+            Free-text narrative supporting the reversal request, especially
+            useful for `FRAD`, `TECH`, or `NARR` reason codes where additional
+            context helps the receiver evaluate.
+        contact_for_questions:
+          $ref: '#/components/schemas/ContactDetails'
+          description: |
+            Contact at the requesting institution for receiver follow-up
+            questions about the reversal request.
+        webhook_url:
+          type: string
+          format: uri
+          maxLength: 500
+          description: |
+            Optional callback URL where the receiving VASP should push
+            `ReversalStatusUpdate` notifications for this request. If not
+            provided, push notifications are delivered to the URL agreed
+            bilaterally between the sending and receiving VASPs at
+            onboarding.
+
+            Supplying this field per request lets the sending VASP route
+            notifications to different endpoints (e.g. by business unit,
+            by transaction class) without renegotiating the bilateral
+            default. Authentication and retry behaviour follow the
+            standard callback pattern.
+
+    ReturnReason:
+      type: object
+      description: |
+        Specifies the reason for the return. Maps to pacs.004 PaymentReturnReason7.
+      required:
+        - code
+      properties:
+        originator:
+          $ref: '#/components/schemas/PartyIdentification'
+          description: Party issuing the return.
+        code:
+          type: string
+          enum:
+            - CANC
+            - AC01
+            - AC04
+            - AM05
+            - BE04
+            - RC03
+            - RR04
+            - FRAD
+            - TECH
+            - NARR
+          description: |
+            Return reason code. See ExternalReturnReason1Code for full ISO 20022
+            code list. Codes here are the subset relevant to crypto payment returns.
+        additional_information:
+          type: array
+          items:
+            type: string
+            maxLength: 105
+          maxItems: 5
+          description: |
+            Optional additional information. Required for `NARR`. For `RR04`,
+            see Sanctions compliance section — additional information must not
+            include details that would constitute tipping off.
+
+    ReversalReason:
+      type: object
+      description: |
+        Specifies the reason for the reversal. Maps to pacs.007
+        PaymentReversalReason10.
+      required:
+        - code
+      properties:
+        originator:
+          $ref: '#/components/schemas/PartyIdentification'
+          description: Party issuing the reversal request.
+        code:
+          type: string
+          enum:
+            - DUPL
+            - FRAD
+            - TECH
+            - CUST
+            - UPAY
+            - CANC
+            - NARR
+          description: |
+            Reversal reason code. Subset of ExternalPaymentReversalReason1Code.
+
+            - `DUPL` — Duplicate payment
+            - `FRAD` — Fraudulent payment
+            - `TECH` — Technical problem
+            - `CUST` — Customer requested reversal (originating customer changed
+              mind, made a mistake, etc.)
+            - `UPAY` — Underpayment / amount discrepancy
+            - `CANC` — General cancellation request after settlement
+            - `NARR` — Narrative; populate `additional_information`
+        additional_information:
+          type: array
+          items:
+            type: string
+            maxLength: 105
+          maxItems: 5
+
+    OriginalTransactionReference:
+      type: object
+      description: |
+        Reference data identifying the original transaction. Maps to pacs.004
+        OriginalTransactionReference45 with crypto-specific extensions.
+      properties:
+        original_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: UUID of the original pacs.crypto instruction.
+        original_uetr:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Original UETR, preserved across the compensating transaction for
+            end-to-end traceability.
+        original_end_to_end_identification:
+          type: string
+          maxLength: 35
+        original_transaction_hash:
+          type: string
+          description: |
+            Hash of the original on-chain transaction. Crypto-specific extension;
+            not present in pacs.004. Provides cryptographic anchoring of the
+            compensating transaction to the on-chain event it remediates.
+        original_block_number:
+          type: integer
+          description: Block number of the original on-chain transaction.
+        original_chain_dli:
+          type: string
+          description: |
+            DLI of the chain on which the original transaction settled.
+            Compensating transactions need not occur on the same chain
+            (e.g. cross-chain remediation), but the original chain reference
+            must be preserved.
+        original_token_dti:
+          type: string
+          description: DTI of the token of the original transaction.
+        original_settlement_amount:
+          $ref: '#/components/schemas/Amount'
+        original_settlement_date:
+          type: string
+          format: date
+        original_finality_status:
+          $ref: '#/components/schemas/FinalityStatus'
+          description: |
+            Finality status of the original transaction at the time of
+            return/reversal initiation.
+
+    CompensatingInstructionResponse:
+      type: object
+      description: |
+        Response to `POST /instruction/{id}/return`. Indicates that the
+        compensating transaction has been accepted and entered the standard
+        instruction lifecycle.
+      properties:
+        compensating_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            UUID of the new compensating instruction. Use this to track the
+            compensating transaction's lifecycle via
+            `GET /instruction/{instructionId}`.
+        compensating_uetr:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            UETR of the compensating transaction. Distinct from the original
+            UETR (which is preserved in `original_transaction_reference`).
+        original_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+        return_identification:
+          type: string
+          description: Echoed return identification from the request, if provided.
+        status:
+          type: string
+          enum: [PENDING]
+          description: |
+            Initial status of the compensating instruction. Same lifecycle
+            as any other instruction from this point forward.
+        accepted_at:
+          type: string
+          format: date-time
+        estimated_finality_at:
+          type: string
+          format: date-time
+          description: |
+            Estimated time at which the compensating transaction will reach
+            `FINAL` status, based on chain conditions. Indicative.
+
+    ReversalRequestResponse:
+      type: object
+      description: |
+        Response to `POST /instruction/{id}/reverse`. The reversal request is
+        forwarded to the receiving VASP; the response indicates the request
+        has been accepted into the request lifecycle.
+      properties:
+        reversal_request_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            UUID of this reversal request. Used to track the request via
+            `GET /instruction/{id}/reversal-status`.
+        original_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+        reversal_identification:
+          type: string
+        status:
+          type: string
+          enum: [REQUESTED]
+        requested_at:
+          type: string
+          format: date-time
+        receiver_response_expected_by:
+          type: string
+          format: date-time
+          description: |
+            Indicative deadline by which the receiving VASP is expected to
+            respond. Bilateral SLA between sending and receiving VASPs.
+
+    ReversalRequestStatus:
+      type: object
+      description: |
+        Current status of a reversal request, including any compensating
+        instruction issued in response.
+      properties:
+        reversal_request_id:
+          $ref: '#/components/schemas/UUIDv4'
+        original_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+        status:
+          type: string
+          enum:
+            - REQUESTED
+            - ACCEPTED
+            - REJECTED
+            - COMPLETED
+            - WITHDRAWN
+        requested_at:
+          type: string
+          format: date-time
+        responded_at:
+          type: string
+          format: date-time
+          description: Time of receiver's response (if any).
+        rejection_reason_code:
+          type: string
+          enum:
+            - WALLET_LOST_CONTROL
+            - CUSTOMER_REFUSED
+            - OPERATIONAL
+            - INVESTIGATION_PENDING
+            - OTHER
+          description: |
+            If `status = REJECTED`, the structured rejection code.
+
+            - `WALLET_LOST_CONTROL` — receiver no longer controls the
+              destination wallet (customer withdrew, account closed, key
+              loss). Disclosable.
+            - `CUSTOMER_REFUSED` — the holder of the destination wallet was
+              contacted and declined to authorise the return. Disclosable.
+            - `OPERATIONAL` — operational impossibility (insufficient
+              liquidity at the destination, wrong chain, technical
+              incompatibility). Disclosable.
+            - `INVESTIGATION_PENDING` — the receiver cannot decide yet
+              because of an internal review. Note: this code may overlap
+              with confidential matters; see Reversal rejection semantics.
+            - `OTHER` — catch-all. Used for any reason the receiver chooses
+              not to categorise. The discipline established in the
+              "Reversal rejection semantics" section applies: senders must
+              not infer the underlying reason from this code or from the
+              absence of a narrative.
+
+            There is deliberately no `RR04` or other regulatory rejection
+            code. See "Reversal rejection semantics" in the description block.
         rejection_reason:
           type: string
           maxLength: 500
           description: |
-            Populated when `cancellation_resolution_status = RJCR`.
-            Explains why the cancellation could not be processed
-            (e.g. "transaction already in mempool at cancellation time +500ms").
-        cancelled_at:
+            Optional free-text narrative accompanying a `REJECTED` status.
+            May be omitted entirely, and senders have no entitlement to a
+            narrative explanation.
+
+            When populated, the narrative must not contain regulatory or
+            sanctions-related detail. Populating this field with content
+            that would reveal a sanctions investigation, screening match,
+            or any equivalent regulatory action would constitute tipping
+            off and is prohibited under the discipline established in the
+            Sanctions compliance section.
+        compensating_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            If `status = ACCEPTED` or `COMPLETED`, the UUID of the
+            compensating instruction issued by the receiver.
+        compensating_instruction_status:
+          $ref: '#/components/schemas/InstructionStatus'
+          description: |
+            Current status of the compensating instruction. Tracks through
+            the standard instruction lifecycle once issued.
+
+    ReversalStatusUpdate:
+      type: object
+      description: |
+        Push notification payload sent from the receiving VASP to the
+        sending VASP when a reversal request status changes or the
+        compensating transaction's lifecycle progresses.
+
+        Delivered as `POST` to the callback URL specified in
+        `ReversalRequest.webhook_url` (per-request) or to the URL agreed
+        bilaterally between the two VASPs (default). Authentication and
+        retry behaviour follow the same callback pattern as the Travel Rule
+        API. Receiving VASPs MUST push these notifications rather than
+        relying on senders to poll `GET /instruction/{id}/reversal-status`.
+
+        See "Reversal status push notification" in the description block
+        for the required and optional event triggers.
+      required:
+        - reversal_request_id
+        - original_instruction_id
+        - status
+        - notification_event
+        - emitted_at
+      properties:
+        reversal_request_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Echoed identifier from the original `ReversalRequestResponse`,
+            allowing the sender to route the notification correctly.
+        original_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+        notification_event:
+          type: string
+          enum:
+            - INITIAL_RESPONSE
+            - COMPENSATING_LIFECYCLE
+            - COMPLETED
+            - INFORMATION_REQUESTED
+            - WITHDRAWN_ACKNOWLEDGED
+          description: |
+            Identifies what triggered this notification.
+
+            - `INITIAL_RESPONSE` — first response from the receiver, transitioning
+              `REQUESTED` to `ACCEPTED` or `REJECTED`. Always fires.
+            - `COMPENSATING_LIFECYCLE` — the compensating transaction's status
+              changed (e.g. moved from `PENDING` to `BROADCAST`, from
+              `CONFIRMING` to `FINAL`). Fires at each major transition.
+            - `COMPLETED` — the compensating transaction reached `FINAL`,
+              and the reversal request transitions to `COMPLETED`. Always fires.
+            - `INFORMATION_REQUESTED` — the receiver needs additional context
+              from the sender before deciding. Optional.
+            - `WITHDRAWN_ACKNOWLEDGED` — the sender has withdrawn the request
+              and the receiver confirms registration of the withdrawal. Optional.
+        status:
+          type: string
+          enum:
+            - REQUESTED
+            - ACCEPTED
+            - REJECTED
+            - COMPLETED
+            - WITHDRAWN
+          description: |
+            Current status of the reversal request after this event.
+        emitted_at:
           type: string
           format: date-time
+          description: Timestamp at which the receiving VASP emitted this notification.
+        compensating_instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
           description: |
-            Timestamp of cancellation acceptance or rejection decision.
+            UUID of the compensating instruction. Populated once the receiver
+            has accepted and a compensating transaction has been created.
+        compensating_instruction_status:
+          $ref: '#/components/schemas/InstructionStatus'
+          description: |
+            Current lifecycle status of the compensating transaction, when
+            applicable.
+        rejection_reason_code:
+          type: string
+          enum:
+            - WALLET_LOST_CONTROL
+            - CUSTOMER_REFUSED
+            - OPERATIONAL
+            - INVESTIGATION_PENDING
+            - OTHER
+          description: |
+            Populated when `status = REJECTED`. Same code set and same
+            tipping-off discipline as `ReversalRequestStatus.rejection_reason_code`.
+        rejection_reason:
+          type: string
+          maxLength: 500
+          description: |
+            Optional free-text narrative when `status = REJECTED`. Must not
+            contain regulatory or sanctions-related detail.
+        information_request_narrative:
+          type: string
+          maxLength: 500
+          description: |
+            When `notification_event = INFORMATION_REQUESTED`, free-text
+            description of what the receiver needs from the sender.
 
     InstructionSummary:
       type: object
@@ -2421,7 +3200,6 @@ components:
         **Blockchain wallet address convention (aligned with pacs.crypto Travel Rule API):**
         - `proxy/type/code = EWAL` (Electronic Wallet, ExternalProxyAccountType1Code)
         - `proxy/identification` = the blockchain wallet address string
-        - `type/proprietary = DIGT` to indicate a digital asset wallet account
         - Supports all address formats: Ethereum 0x… (42 chars), Bitcoin bc1…/1…/3…,
           Solana base58 (44 chars), XRP classic/X-address, TRON T… (34 chars), etc.
 
@@ -2471,8 +3249,10 @@ components:
         type:
           type: object
           description: |
-            Nature or use of the account.
-            Use `proprietary = DIGT` for digital asset / blockchain wallet accounts.
+            Nature or use of the account. The account type is conveyed via the
+            `proxy/type/code` field (`EWAL` for blockchain wallets); this field
+            is retained for compatibility with pacs.008 implementers who may
+            populate it for their own internal categorisation.
           oneOf:
             - type: object
               required: [code]
@@ -2487,8 +3267,11 @@ components:
                 proprietary:
                   type: string
                   maxLength: 35
-                  description: Use "DIGT" for digital asset / blockchain wallet accounts.
-                  example: "DIGT"
+                  description: |
+                    Optional implementer-specific account-type identifier.
+                    For blockchain wallets, the registered ExternalProxyAccountType1Code
+                    `EWAL` carried in `proxy/type/code` is the standard way to identify
+                    the account as an electronic wallet — no proprietary code is needed.
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
@@ -2674,8 +3457,6 @@ components:
             town_name: "Berlin"
             country: "DE"
         debtor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
@@ -2694,8 +3475,6 @@ components:
           lei: "724500QHKL6MVSQQ1Z17"
           country: "NL"
         creditor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
@@ -2784,15 +3563,11 @@ components:
         purpose:
           code: "TRAD"
         debtor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
             identification: "0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9"
         creditor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
@@ -2867,15 +3642,11 @@ components:
           name: "Jan de Vries"
           country: "NL"
         debtor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
             identification: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"
         creditor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
@@ -2888,6 +3659,169 @@ components:
             token_symbol: "BTC"
           chain_dli: "4H95J0R2X"
           custody_model: "FULL_CUSTODY"
+
+    Example_USDC_CorporateToVASP:
+      summary: Corporate-direct instruction — TechFlow SG instructs Coinbase Asia, no bank in the flow
+      description: |
+        TechFlow Singapore Pte Ltd (large corporate with own treasury wallet management)
+        instructs Coinbase Asia Pte Ltd directly to transfer 75,000 USDC on Ethereum
+        to a supplier. No intermediating bank on the originator side. `debtor_agent`
+        is omitted. The corporate retains its own LEI and customer status with the VASP.
+        Full custody at the VASP.
+      value:
+        payment_identification:
+          message_identification: "MSG-TECHFLOW-20260518-007"
+          end_to_end_identification: "E2E-TECHFLOW-SUP-20260518-007"
+          uetr: "aabbccdd-1234-5678-90ab-cdef12345678"
+        settlement_information:
+          settlement_method: "CLRG"
+          clearing_system:
+            proprietary: "DLID/X9J9XDMTD"
+        payment_type_information:
+          instruction_priority: "NORM"
+          local_instrument:
+            proprietary: "DTID/T9B3X8H2K"
+          category_purpose:
+            code: "SUPP"
+        interbank_settlement_amount:
+          amount: "75000.000000"
+          currency: "USD"
+        instructed_amount:
+          amount: "75000.00"
+          currency: "USD"
+        charge_bearer: "DEBT"
+        debtor:
+          name: "TechFlow Singapore Pte Ltd"
+          lei: "9598005H8H0HE9JJZB55"
+          country: "SG"
+          postal_address:
+            street_name: "Marina Boulevard 1"
+            post_code: "018989"
+            town_name: "Singapore"
+            country: "SG"
+        debtor_account:
+          proxy:
+            type:
+              code: "EWAL"
+            identification: "0x14e29B6e4f0C2C4f0bD2A5eA43b8e0A9e5d4c8C12"
+        creditor_agent:
+          lei: "5493007A8B7BG3DJK1E32"
+          name: "Coinbase Asia Pte Ltd"
+          country: "SG"
+        creditor:
+          name: "Acme Components Ltd"
+          lei: "529900XYZ4567ABCD123"
+          country: "HK"
+        creditor_account:
+          proxy:
+            type:
+              code: "EWAL"
+            identification: "0x9b2C8aC4D5e8F2A7B4c9D6e3F1aA8B5c7D9eF2A4"
+        purpose:
+          code: "SUPP"
+        travel_rule_record_id: "660f9511-f3ac-52e5-b827-557766551133"
+        remittance_information:
+          structured:
+            creditor_reference_information:
+              type:
+                code_or_proprietary:
+                  code: "SCOR"
+              reference: "INV-TF-2026-04231"
+          unstructured: "Supplier payment INV-TF-2026-04231 / contract ACME-TF-2026-Q2"
+        blockchain_instruction:
+          token:
+            token_dti: "T9B3X8H2K"
+            chain_dli: "X9J9XDMTD"
+            token_symbol: "USDC"
+            token_standard: "ERC-20"
+          chain_dli: "X9J9XDMTD"
+          custody_model: "FULL_CUSTODY"
+          maximum_slippage_rate: "0.001"
+
+    Example_USDC_SelfCustody_Reconciliation:
+      summary: Self-custody recording — corporate broadcast its own transaction, records it with partner VASP
+      description: |
+        Global Industries Plc (UK-based large corporate) runs its own Ethereum node
+        and signs transactions internally with its own HSM. It executed a 120,000 USDC
+        transfer to a supplier's wallet directly. It now records the transaction with
+        its partner VASP (Coinbase Custody UK Ltd) for reconciliation, audit, and
+        end-of-day position reporting. `custody_model = SELF_CUSTODY`, `debtor_agent`
+        is omitted because the corporate signs itself. The VASP does not participate
+        in the signing or broadcast — it only mirrors the position.
+      value:
+        payment_identification:
+          message_identification: "MSG-GLOBIND-SC-20260520-002"
+          end_to_end_identification: "E2E-GLOBIND-SUP-20260520-002"
+          uetr: "ddeeff00-1111-2222-3333-aabbccddee99"
+        settlement_information:
+          settlement_method: "CLRG"
+          clearing_system:
+            proprietary: "DLID/X9J9XDMTD"
+        payment_type_information:
+          instruction_priority: "NORM"
+          local_instrument:
+            proprietary: "DTID/T9B3X8H2K"
+          category_purpose:
+            code: "SUPP"
+        interbank_settlement_amount:
+          amount: "120000.000000"
+          currency: "USD"
+        instructed_amount:
+          amount: "120000.00"
+          currency: "USD"
+        charge_bearer: "DEBT"
+        debtor:
+          name: "Global Industries Plc"
+          lei: "213800ABC123DEF45678"
+          country: "GB"
+          postal_address:
+            street_name: "Canary Wharf 25"
+            post_code: "E14 5AB"
+            town_name: "London"
+            country: "GB"
+        debtor_account:
+          proxy:
+            type:
+              code: "EWAL"
+            identification: "0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7"
+        creditor_agent:
+          lei: "549300UK7B8CC9DJK1F84"
+          name: "Coinbase Custody UK Ltd"
+          country: "GB"
+        creditor:
+          name: "Industrial Parts Ltd"
+          lei: "529900PQR4567STU90123"
+          country: "IE"
+        creditor_account:
+          proxy:
+            type:
+              code: "EWAL"
+            identification: "0x77aB4C8d9E2f1A3B5C7D9E0F2A4B6C8D0E2F4A6B"
+        purpose:
+          code: "SUPP"
+        travel_rule_record_id: "770e8400-e29b-41d4-a716-446655441234"
+        remittance_information:
+          structured:
+            creditor_reference_information:
+              type:
+                code_or_proprietary:
+                  code: "SCOR"
+              reference: "INV-GI-2026-00871"
+          unstructured: "Supplier payment per contract GI-IP-2026-Q2 / INV-GI-2026-00871"
+        blockchain_instruction:
+          token:
+            token_dti: "T9B3X8H2K"
+            chain_dli: "X9J9XDMTD"
+            token_symbol: "USDC"
+            token_standard: "ERC-20"
+          chain_dli: "X9J9XDMTD"
+          custody_model: "SELF_CUSTODY"
+          on_chain_settlement_evidence:
+            transaction_hash: "0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321"
+            block_number: 19234567
+            block_timestamp: "2026-05-20T09:23:45Z"
+            confirmation_depth: 12
+            finality_status: "FINAL"
 
     Example_Status_Confirmed:
       summary: Instruction status — FINAL (confirmed)
@@ -2908,15 +3842,11 @@ components:
           amount: "250000.000000"
           currency: "USD"
         debtor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
             identification: "0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9"
         creditor_account:
-          type:
-            proprietary: "DIGT"
           proxy:
             type:
               code: "EWAL"
@@ -2959,6 +3889,143 @@ components:
           finality_status: "PROBABILISTIC"
         created_at: "2025-06-15T14:10:00Z"
         updated_at: "2025-06-15T14:14:55Z"
+
+    Example_Return_WrongAddress:
+      summary: Return — wrong wallet address (AC01)
+      description: |
+        Receiving VASP discovers that the original transfer was credited to a
+        wallet that does not belong to the intended customer. Issues a
+        compensating return.
+      value:
+        return_identification: "RTN-2026-04823"
+        returned_amount:
+          amount: "10000.00"
+          currency: "USDC"
+        return_reason:
+          code: "AC01"
+          additional_information:
+            - "Wallet address did not match registered customer"
+        original_transaction_reference:
+          original_instruction_id: "7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c"
+          original_uetr: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+          original_transaction_hash: "0xabcd1234ef567890abcd1234ef567890abcd1234ef567890abcd1234ef567890"
+          original_block_number: 18943221
+          original_chain_dli: "X9J9XDMTD"
+          original_token_dti: "4H95J0R2X"
+          original_settlement_amount:
+            amount: "10000.00"
+            currency: "USDC"
+          original_settlement_date: "2026-04-15"
+          original_finality_status: "FINAL"
+
+    Example_Return_Cancellation:
+      summary: Return — post-settlement cancellation request (CANC)
+      description: |
+        Original sender requests cancellation after settlement. Receiver
+        cooperates and issues a compensating return for the full amount.
+      value:
+        return_identification: "RTN-2026-04824"
+        returned_amount:
+          amount: "5000.00"
+          currency: "USDC"
+        return_reason:
+          code: "CANC"
+          additional_information:
+            - "Cancellation requested by originator — error in payment"
+        original_transaction_reference:
+          original_instruction_id: "8a4b3c2d-9e5f-6071-8c9d-2e3f4a5b6c7d"
+          original_uetr: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+          original_transaction_hash: "0xdef9876543210fedcba9876543210fedcba9876543210fedcba9876543210fed"
+          original_chain_dli: "X9J9XDMTD"
+          original_token_dti: "4H95J0R2X"
+
+    Example_Return_Regulatory:
+      summary: Return — regulatory reason (RR04, sanctions-aware)
+      description: |
+        Return for regulatory reason. Note that `additional_information` does
+        not include sanctions detail — populating it with details of a
+        sanctions match would constitute tipping off.
+      value:
+        return_identification: "RTN-2026-04825"
+        returned_amount:
+          amount: "25000.00"
+          currency: "USDT"
+        return_reason:
+          code: "RR04"
+        original_transaction_reference:
+          original_instruction_id: "1a2b3c4d-5e6f-7080-9a0b-1c2d3e4f5a6b"
+          original_uetr: "cccccccc-dddd-eeee-ffff-aaaaaaaaaaaa"
+
+    Example_Reversal_Fraud:
+      summary: Reversal — fraudulent originator (FRAD)
+      description: |
+        Sender's bank discovers fraud after settlement and requests reversal
+        from the receiving VASP. Compensating transaction will be issued by
+        the receiver if it consents.
+      value:
+        reversal_identification: "RVS-2026-00891"
+        reversed_amount:
+          amount: "50000.00"
+          currency: "USDC"
+        reversal_reason:
+          code: "FRAD"
+          additional_information:
+            - "Originator account confirmed as compromised — see narrative"
+        request_narrative: |
+          Originator account confirmed compromised by our fraud team at
+          15:42 UTC on 2026-04-23. Account holder identity-verified the
+          unauthorised activity. Receiving VASP cooperation requested for
+          compensating transfer back to the sending bank's recovery wallet.
+        contact_for_questions:
+          name: "Bank Fraud Operations"
+          email: "fraud-ops@example-bank.com"
+          phone: "+352-12-345-6789"
+        original_transaction_reference:
+          original_instruction_id: "2b3c4d5e-6f70-8090-a0b1-c2d3e4f5a6b7"
+          original_uetr: "dddddddd-eeee-ffff-aaaa-bbbbbbbbbbbb"
+          original_transaction_hash: "0x1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff"
+
+    Example_Reversal_Duplicate:
+      summary: Reversal — duplicate payment (DUPL)
+      description: |
+        Sending bank's reconciliation detects a duplicated instruction.
+        Requests reversal of the duplicate.
+      value:
+        reversal_identification: "RVS-2026-00892"
+        reversed_amount:
+          amount: "1500.00"
+          currency: "EURC"
+        reversal_reason:
+          code: "DUPL"
+          additional_information:
+            - "Duplicate of instruction 3c4d5e6f-7080-90a0-b1c2-d3e4f5a6b7c8"
+        original_transaction_reference:
+          original_instruction_id: "4d5e6f70-8090-a0b1-c2d3-e4f5a6b7c8d9"
+          original_uetr: "eeeeeeee-ffff-aaaa-bbbb-cccccccccccc"
+
+    Example_Reversal_Technical:
+      summary: Reversal — technical problem (TECH)
+      description: |
+        Technical issue post-settlement (e.g. payment processed at wrong amount
+        due to a system bug). Sender requests reversal.
+      value:
+        reversal_identification: "RVS-2026-00893"
+        reversed_amount:
+          amount: "100000.00"
+          currency: "USDC"
+        reversal_reason:
+          code: "TECH"
+          additional_information:
+            - "System bug caused 100x amount inflation — see narrative"
+        request_narrative: |
+          Internal payment platform bug on 2026-04-23 caused the original
+          instruction amount to be inflated from 1,000.00 USDC to 100,000.00
+          USDC at submission. Bug confirmed and patched. Requesting reversal
+          for full amount; corrected re-issue at 1,000.00 USDC will follow
+          under separate instruction.
+        original_transaction_reference:
+          original_instruction_id: "5e6f7080-90a0-b1c2-d3e4-f5a6b7c8d9e0"
+          original_uetr: "ffffffff-aaaa-bbbb-cccc-dddddddddddd"
 
 security:
   - mutualTLS: []

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Travel Rule API v3 – ISO 20022 pacs.008.001.14</title>
+  <title>Travel Rule API v1.3 – pacs.crypto (ISO 20022 pacs.008.001.14)</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -286,8 +286,8 @@
 
 <header>
   <div class="logo">TR</div>
-  <h1>Travel Rule API v3</h1>
-  <span class="hbadge hb-ver">v3.5</span>
+  <h1>Travel Rule API v1.3</h1>
+  <span class="hbadge hb-ver">v1.3.0</span>
   <div class="hspace">
     <span class="hbadge hb-purple">pacs.008.001.14</span>
     <span class="hbadge hb-cyan">FATF R.16 · EU TFR</span>
@@ -335,6 +335,7 @@
       <option value="eth">🏢 B2B ETH — Acme DE → Bravo NL (single-chain)</option>
       <option value="btc">👤 Retail BTC — Self-custody → Kraken BE (unhosted)</option>
       <option value="bridge">🌉 USDC Bridge — Vertex US → SingTech SG (ETH → Polygon via CCTP)</option>
+      <option value="corp_self_hosting">🏛️ Corporate self-hosting — Global Industries → counterparty (v1.3, no debtor_agent)</option>
       <option value="put_correction">✏️ PUT Correction — Acme resubmits after Bitvavo rejection</option>
       <option value="cb_accepted">✅ Callback — Bitvavo accepts data quality</option>
       <option value="cb_rejected">❌ Callback — Bitvavo rejects (missing address)</option>
@@ -925,6 +926,25 @@ const SCENARIOS = {
        auth2:'Monetary Authority of Singapore',authctry2:'SG',rcode2:'MAS-PSA',rside2:'CRED',
        screener:'Chainalysis KYT',scrresult:'CLEAR'}
   },
+  corp_self_hosting:{
+    method:'POST',
+    info:'<strong>Corporate self-hosting (v1.3 flow variant)</strong><br/>Global Industries Plc (UK corporate, own Ethereum node + HSM) → Industrial Parts Ltd (IE) at Coinbase Custody UK<br/>USD 120,000 USDC · No intermediating bank or VASP on the originating side. The <code>debtor_agent</code> field is <strong>omitted</strong>. Travel Rule data is exchanged bilaterally between the corporate and the receiving VASP, using the corporate\'s own LEI as the originator identity.',
+    f:{timing:'POST_TX',e2e:'E2E-GLOBIND-SUP-20260520-002',uetr:'ddeeff00-1111-2222-3333-aabbccddee99',
+       amt:'120000.00',ccy:'USD',fiat:'',fiatccy:'',date:'2026-05-20',dti:'DTID/T9B3X8H2K',
+       purp:'SUPP',inv:'INV-GI-2026-00871',ustrd:'Supplier payment per contract GI-IP-2026-Q2',
+       dname:'Global Industries Plc',dctry:'GB',dlei:'213800ABC123DEF45678',dnid:'',ddob:'',
+       dwallet:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7',dwtype:'HOSTED',
+       cname:'Industrial Parts Ltd',cctry:'IE',clei:'529900PQR4567STU90123',
+       cwallet:'0x77aB4C8d9E2f1A3B5C7D9E0F2A4B6C8D0E2F4A6B',cwtype:'HOSTED',
+       ovasp:'',ovasp_lei:'',ocrypto:'',ocrypto_lei:'',
+       bvasp:'Coinbase Custody UK Ltd','bvasp-lei':'549300UK7B8CC9DJK1F84',bcrypto:'','bcrypto-lei':'',
+       chain:'DLID/X9J9XDMTD',
+       txid:'0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321',
+       block:'19234567',conf:'12',txstatus:'CONFIRMED',
+       auth1:'Financial Conduct Authority',authctry1:'GB',rcode1:'FCA-MLR',rside1:'DEBT',
+       screener:'Internal',scrresult:'CLEAR',
+       v13_note:'debtor_agent omitted — corporate self-hosts; corporate LEI carries the originator identity directly'}
+  },
   put_correction:{
     method:'PUT',
     info:'<strong>PUT Correction — Acme resubmits after rejection</strong><br/>Bitvavo rejected the ETH record: originator address missing (EU TFR Art.4(1)(b)).<br/>Acme adds postal address and resubmits with <code>correction_of_callback_ref</code>.<br/>Status: REJECTED → SUBMITTED (awaiting new callback).',
@@ -1212,12 +1232,12 @@ function buildReq() {
       reporting_code: g('f-rcode2'), amount: { currency: g('f-ccy'), amount: g('f-amt')||'0.00' } }]
   });
 
-  const debtorAgent = { financial_institution_identification: {
-    lei: g('f-ovasp-lei')||undefined, name: g('f-ovasp')||undefined
-  }};
-  const creditorAgent = { financial_institution_identification: {
-    lei: g('f-bvasp-lei')||undefined, name: g('f-bvasp')||undefined
-  }};
+  const debtorAgent = g('f-ovasp') ? { financial_institution_identification: {
+    lei: g('f-ovasp-lei')||undefined, name: g('f-ovasp')
+  }} : undefined;
+  const creditorAgent = g('f-bvasp') ? { financial_institution_identification: {
+    lei: g('f-bvasp-lei')||undefined, name: g('f-bvasp')
+  }} : undefined;
   const debtorCryptoAgent = g('f-ocrypto') ? { financial_institution_identification: {
     lei: g('f-ocrypto-lei')||undefined, name: g('f-ocrypto')
   }} : undefined;
@@ -1252,7 +1272,6 @@ function buildReq() {
             }} : undefined
       },
       debtor_account: {
-        type: { proprietary: 'DIGT' },
         proxy: g('f-dwallet') ? { type: { code: 'EWAL' }, identification: g('f-dwallet') } : undefined
       },
       debtor_wallet_type: g('f-dwtype'),
@@ -1265,7 +1284,6 @@ function buildReq() {
         identification: g('f-clei') ? { organisation_identification: { lei: g('f-clei') } } : undefined
       },
       creditor_account: {
-        type: { proprietary: 'DIGT' },
         proxy: g('f-cwallet') ? { type: { code: 'EWAL' }, identification: g('f-cwallet') } : undefined
       },
       creditor_wallet_type: g('f-cwtype'),

@@ -2,11 +2,18 @@ openapi: 3.1.0
 
 info:
   title: pacs.crypto — Blockchain Account Reporting API
-  version: 1.0.0
+  version: 1.3.0
   description: |
     # Blockchain Account Reporting API — Shared Data Model
 
     **Third specification in the pacs.crypto family.**
+
+    > **Version note (v1.3.0):** This specification was previously versioned
+    > independently at v1.0.0. With the v1.3 release of the pacs.crypto family,
+    > all specifications adopt the unified family version. No data-model
+    > changes are introduced in this version bump — the spec is functionally
+    > identical to v1.0.0. The version alignment simplifies cross-spec
+    > reference and family-level release communication.
 
     This document defines the shared data model underpinning the pacs.crypto
     Blockchain Account Reporting API. The API provides ISO 20022-aligned account
@@ -1173,10 +1180,9 @@ components:
       maxLength: 130
       description: |
         Blockchain wallet or contract address. Carried in ISO 20022 fields using
-        the `CashAccount40/proxy` convention: `proxy/type/code = EWAL`,
-        `proxy/identification` = wallet address string, `type/proprietary = DIGT`
-        for digital asset accounts. This convention is consistent across the
-        pacs.crypto family.
+        the `CashAccount40/proxy` convention: `proxy/type/code = EWAL` and
+        `proxy/identification` = wallet address string. This convention is
+        consistent across the pacs.crypto family.
 
         Address format is chain-specific:
         - EVM chains: `0x` followed by 40 hex characters

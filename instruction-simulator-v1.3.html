@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Blockchain Payment Instruction API v1 – pacs.crypto</title>
+  <title>Blockchain Payment Instruction API v1.3 – pacs.crypto</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -53,14 +53,14 @@
     .mtab.ap{background:var(--green-bg);border-color:rgba(63,185,80,.4);color:var(--green)}
     .mtab.ag{background:var(--blue-bg);border-color:rgba(56,139,253,.4);color:var(--blue)}
     .mtab.ard{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red)}
-    .mtab.apu{background:rgba(188,140,255,.1);border-color:rgba(188,140,255,.3);color:var(--purple)}
+    .mtab.arp{background:rgba(188,140,255,.1);border-color:rgba(188,140,255,.35);color:var(--purple)}
     .ep{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
       border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-bottom:11px;word-break:break-all}
     .mpill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px}
     .pp{background:rgba(63,185,80,.18);color:var(--green)}
     .gp{background:rgba(56,139,253,.15);color:var(--blue)}
     .rp-pill{background:rgba(248,81,73,.15);color:var(--red)}
-    .pu{background:rgba(188,140,255,.18);color:var(--purple)}
+    .pup{background:rgba(188,140,255,.18);color:var(--purple)}
 
     select{width:100%;background:var(--surface3);border:1px solid var(--border);
       border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;
@@ -105,6 +105,7 @@
     .sbtn.sp{background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff}
     .sbtn.sg{background:linear-gradient(135deg,#1b6fd9,#388bfd);color:#fff}
     .sbtn.sr{background:linear-gradient(135deg,#b62324,#f85149);color:#fff}
+    .sbtn.spu{background:linear-gradient(135deg,#7b3fd9,#bc8cff);color:#fff}
     .sbtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
     .sbtn:active{transform:translateY(0);filter:brightness(.95)}
 
@@ -249,13 +250,13 @@
 
 <header>
   <div class="logo">PI</div>
-  <h1>Blockchain Payment Instruction API v1</h1>
-  <span class="hbadge hb-ver">v1.0</span>
+  <h1>Blockchain Payment Instruction API v1.3</h1>
+  <span class="hbadge hb-ver">v1.3.0</span>
   <div class="hspace">
-    <span class="hbadge hb-purple">pacs.008 · 002 · 028 · camt.056/029</span>
+    <span class="hbadge hb-purple">pacs.008.001.14 · pacs.004 · pacs.007</span>
     <span class="hbadge hb-cyan">DTI · DLI · LEI · ISO 24165</span>
-    <span class="hbadge hb-amber">Full Custody · Delegated Signing</span>
-    <span class="hbadge hb-green">Quote · Instruct · Status · Cancel · Search</span>
+    <span class="hbadge hb-amber">Full Custody · Delegated · Compact Hash</span>
+    <span class="hbadge hb-green">Quote · Instruct · Returns · Reversals</span>
   </div>
 </header>
 
@@ -284,8 +285,8 @@
       <button class="mtab ap" id="tab-quote" onclick="setMethod('QUOTE')" style="font-size:9px">QUOTE</button>
       <button class="mtab" id="tab-post" onclick="setMethod('POST')" style="font-size:10px">POST</button>
       <button class="mtab" id="tab-get" onclick="setMethod('GET')" style="font-size:10px">GET</button>
-      <button class="mtab" id="tab-statusreq" onclick="setMethod('STATUSREQ')" style="font-size:9px">STATUS-REQ</button>
       <button class="mtab ard" id="tab-delete" onclick="setMethod('DELETE')" style="font-size:9px">CANCEL</button>
+      <button class="mtab" id="tab-returns" onclick="setMethod('RETURNS')" style="font-size:9px">RETURN</button>
       <button class="mtab" id="tab-search" onclick="setMethod('SEARCH')" style="font-size:9px">SEARCH</button>
     </div>
     <div class="ep" id="ep-display">
@@ -297,16 +298,22 @@
       <option value="">— select a scenario —</option>
       <option value="quote_usdc">💰 Quote — USDC 250k on Ethereum (full custody)</option>
       <option value="usdc_b2b">🏢 POST — B2B USDC Acme DE → Bravo NL (full custody)</option>
+      <option value="usdc_corporate_to_vasp">🏛️ POST — Corporate-to-VASP direct (no debtor_agent, v1.3)</option>
+      <option value="usdc_self_custody">📋 POST — Self-custody reconciliation record (SELF_CUSTODY, v1.3)</option>
       <option value="onramp">🔄 POST — ONRAMP EUR→USDC (Bitvavo converts, full custody)</option>
       <option value="btc_retail">👤 POST — BTC retail Jan de Vries (self-custody target)</option>
-      <option value="erc3643">🎫 POST — ERC-3643 regulated security token w/ EAS attestation</option>
-      <option value="delegated">🔑 Delegated signing — full 5-step flow (POST→QUOTED→SIGN→BROADCAST→FINAL)</option>
-      <option value="get_final">✅ GET — Instruction FINAL (dual-layer status: iso_status ACSC)</option>
-      <option value="get_confirming">⏳ GET — Instruction CONFIRMING (iso_status ACSP)</option>
-      <option value="slippage">⚠️ GET — RJCT / SLIPPAGE_EXCEEDED (pacs.002 reason code)</option>
-      <option value="status_req">📡 STATUS-REQ — pacs.028 analogue, refresh from chain</option>
-      <option value="cancel">🗑️ CANCEL — camt.056/029 ACCR (accepted)</option>
-      <option value="cancel_rejected">🚫 CANCEL — camt.056/029 RJCR (too late, already broadcast)</option>
+      <option value="delegated">🔑 Delegated signing — full transaction format (POST→QUOTED→SIGN→BROADCAST→FINAL)</option>
+      <option value="delegated_hash">🔐 Delegated signing — compact hash format (HSM signs opaque hash with VASP commitment)</option>
+      <option value="get_final">✅ GET — Instruction FINAL (confirmed on-chain)</option>
+      <option value="get_confirming">⏳ GET — Instruction CONFIRMING (3 of 12 blocks)</option>
+      <option value="slippage">⚠️ GET — SLIPPAGE_EXCEEDED rejection</option>
+      <option value="cancel">🗑️ DELETE — Cancel pending instruction (pre-broadcast)</option>
+      <option value="return_ac01">↩️ RETURN — Wrong wallet address (AC01) — receiver-initiated</option>
+      <option value="return_canc">↩️ RETURN — Post-settlement cancellation (CANC) — receiver cooperates</option>
+      <option value="return_rr04">↩️ RETURN — Regulatory reason (RR04) — tipping-off discipline</option>
+      <option value="reverse_frad">⏮️ REVERSE — Fraud (FRAD) — full lifecycle REQUESTED→ACCEPTED→COMPLETED</option>
+      <option value="reverse_rejected">🚫 REVERSE — Rejected (OTHER) — sanctions-aware ambiguity</option>
+      <option value="reverse_withdrawn">↻ REVERSE — Withdrawn by sender before receiver response</option>
       <option value="search_basic">🔎 SEARCH — June USDC instructions, FINAL only</option>
     </select>
     <div class="si" id="si">Select a scenario or fill in the fields across all tabs.</div>
@@ -366,6 +373,14 @@
       <select id="f-custody">
         <option value="FULL_CUSTODY">FULL_CUSTODY — VASP holds keys</option>
         <option value="DELEGATED_SIGNING">DELEGATED_SIGNING — Bank HSM signs</option>
+        <option value="SELF_CUSTODY">SELF_CUSTODY — Originator broadcasts (record only)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Signing Payload Format <span class="ft">delegated only</span></div>
+      <select id="f-signfmt">
+        <option value="FULL_TRANSACTION">FULL_TRANSACTION — VASP returns unsigned transaction</option>
+        <option value="COMPACT_HASH">COMPACT_HASH — VASP returns hash + signed cross-checks</option>
       </select>
     </div>
     <div class="fg">
@@ -429,6 +444,57 @@
       </select></div>
     <div class="fg"><div class="fl">API Base URL <span class="ft">used in LIVE mode</span></div>
       <input type="text" id="f-api-base" value="http://127.0.0.1:5050" placeholder="http://127.0.0.1:5050"/></div>
+
+    <div id="returns-fields" style="display:none">
+      <div class="callout" style="margin-bottom:10px">
+        Returns and reversals are <strong>compensating transactions</strong> — new on-chain transfers in the opposite direction, linked to the original by reference. The original instruction stays at <code>FINAL</code> on-chain.
+      </div>
+      <div class="fsec">Return Reason <span class="ft">populate for receiver-initiated</span></div>
+      <div class="fg"><div class="fl">Return Reason Code <span class="ft">pacs.004</span></div>
+        <select id="f-retreason">
+          <option value="">— select —</option>
+          <option value="AC01">AC01 — Wrong wallet address</option>
+          <option value="AC04">AC04 — Account closed</option>
+          <option value="AM05">AM05 — Duplication</option>
+          <option value="BE04">BE04 — Missing creditor address</option>
+          <option value="CANC">CANC — Post-settlement cancellation</option>
+          <option value="FRAD">FRAD — Fraudulent originator</option>
+          <option value="RR04">RR04 — Regulatory reason (no detail)</option>
+          <option value="TECH">TECH — Technical problem</option>
+          <option value="NARR">NARR — Narrative (free text)</option>
+        </select></div>
+      <div class="fg"><div class="fl">Additional Information <span class="ft">leave empty for RR04</span></div>
+        <textarea id="f-retaddinfo" rows="2" placeholder="Empty for RR04 — tipping-off discipline applies"></textarea></div>
+      <div class="fg"><div class="fl">Original Instruction ID</div>
+        <input type="text" id="f-retorigid" placeholder="UUID of the FINAL original"/></div>
+      <div class="fg"><div class="fl">Original UETR</div>
+        <input type="text" id="f-retoriguetr" placeholder="UETR of original"/></div>
+      <div class="fg"><div class="fl">Original Transaction Hash</div>
+        <input type="text" id="f-retorigtxhash" placeholder="0x..."/></div>
+
+      <div class="fsec">Reversal Reason <span class="ft">populate for sender-initiated</span></div>
+      <div class="fg"><div class="fl">Reversal Reason Code <span class="ft">pacs.007</span></div>
+        <select id="f-revreason">
+          <option value="">— select —</option>
+          <option value="DUPL">DUPL — Duplicate payment</option>
+          <option value="FRAD">FRAD — Fraudulent payment</option>
+          <option value="TECH">TECH — Technical problem</option>
+          <option value="CUST">CUST — Customer requested</option>
+          <option value="UPAY">UPAY — Underpayment / amount discrepancy</option>
+          <option value="CANC">CANC — Post-settlement cancellation</option>
+          <option value="NARR">NARR — Narrative (free text)</option>
+        </select></div>
+      <div class="fg"><div class="fl">Request Narrative</div>
+        <textarea id="f-revnarr" rows="3" placeholder="Free-text supporting the reversal"></textarea></div>
+      <div class="fg"><div class="fl">Original Instruction ID</div>
+        <input type="text" id="f-revorigid" placeholder="UUID of the FINAL original"/></div>
+      <div class="fg"><div class="fl">Original UETR</div>
+        <input type="text" id="f-revoriguetr" placeholder="UETR of original"/></div>
+      <div class="fg"><div class="fl">Original Transaction Hash</div>
+        <input type="text" id="f-revorigtxhash" placeholder="0x..."/></div>
+      <div class="fg"><div class="fl">Webhook URL <span class="ft">push notifications</span></div>
+        <input type="text" id="f-revwebhook" placeholder="https://your-bank/reversal-status"/></div>
+    </div>
 
     <button class="sbtn sp" id="sbtn" onclick="sendRequest()">
       <span id="slbl">▶ Request Quote</span>
@@ -604,17 +670,16 @@ function setMethod(m) {
   const isDelete = m === 'DELETE';
   const isQuote = m === 'QUOTE';
   const isPost = m === 'POST';
-  const isStatusReq = m === 'STATUSREQ';
+  const isReturns = m === 'RETURNS';
   const isReadLike = isGet || isSearch;
 
-  ['quote','post','get','statusreq','delete','search'].forEach(x => {
+  ['quote','post','get','delete','returns','search'].forEach(x => {
     const btn = document.getElementById('tab-' + x);
     if (!btn) return;
-    const mLower = m.toLowerCase();
-    const active = mLower === x;
+    const active = m === x.toUpperCase() || (m === 'DELETE' && x === 'delete') || (m === 'RETURNS' && x === 'returns');
     btn.className = 'mtab' + (active
       ? (x === 'delete' ? ' ard'
-        : (x === 'statusreq' ? ' apu'
+        : (x === 'returns' ? ' arp'
         : (x === 'get' || x === 'search' ? ' ag' : ' ap')))
       : '');
   });
@@ -623,28 +688,27 @@ function setMethod(m) {
   const ep = isQuote   ? '/v1/instruction/quote'
            : isPost    ? '/v1/instruction'
            : isGet     ? '/v1/instruction/{instructionId}'
-           : isStatusReq ? '/v1/instruction/{instructionId}/status-request'
            : isDelete  ? '/v1/instruction/{instructionId}'
+           : isReturns ? '/v1/instruction/{instructionId}/return | /reverse'
            : '/v1/instruction/search';
 
-  const pillClass = isGet || isSearch ? 'gp'
-                  : isDelete ? 'rp-pill'
-                  : isStatusReq ? 'pu' : 'pp';
+  const pillClass = isGet || isSearch ? 'gp' : isDelete ? 'rp-pill' : isReturns ? 'pup' : 'pp';
   document.getElementById('ep-display').innerHTML =
     `<span class="mpill ${pillClass}" id="mp">${verb}</span>${ep}`;
 
   const btnEl = document.getElementById('sbtn');
-  btnEl.className = 'sbtn ' + (isDelete ? 'sr' : isReadLike ? 'sg' : 'sp');
-  g('slbl'); // touch
+  btnEl.className = 'sbtn ' + (isDelete ? 'sr' : isReturns ? 'spu' : isReadLike ? 'sg' : 'sp');
+  g('slbl');
   document.getElementById('slbl').textContent =
-      isQuote     ? '▶ Request Quote'
-    : isPost      ? '▶ Submit Instruction'
-    : isGet       ? '▶ Retrieve Status'
-    : isStatusReq ? '▶ Request Status (pacs.028)'
-    : isDelete    ? '▶ Cancel Instruction'
+      isQuote   ? '▶ Request Quote'
+    : isPost    ? '▶ Submit Instruction'
+    : isGet     ? '▶ Retrieve Status'
+    : isDelete  ? '▶ Cancel Instruction'
+    : isReturns ? '▶ Submit Return / Reversal'
     : '▶ Search Instructions';
 
   document.getElementById('search-fields').style.display = isSearch ? '' : 'none';
+  document.getElementById('returns-fields').style.display = isReturns ? '' : 'none';
 }
 
 // ── SCENARIOS ────────────────────────────────────────────────────────────────
@@ -679,6 +743,50 @@ const SCENARIOS = {
              contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
              issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
     ramp: { ramptype:'NONE' }
+  },
+  usdc_corporate_to_vasp: {
+    method: 'POST',
+    info: '<strong>Corporate-to-VASP direct (v1.3 flow variant)</strong><br/>TechFlow Singapore (large corporate, own treasury wallet management) instructs Coinbase Asia <strong>directly</strong> to transfer 75,000 USDC to a supplier — no intermediating bank. The <code>debtor_agent</code> field is <strong>omitted</strong> entirely. The corporate has its own LEI and bilateral relationship with the VASP. Full custody at the VASP.',
+    f: { e2e:'E2E-TECHFLOW-SUP-20260518-007', uetr:'aabbccdd-1234-5678-90ab-cdef12345678',
+         amt:'75000.000000', ccy:'USD', fiat:'75000.00', fiatccy:'USD',
+         expiry:'2026-05-18T18:00:00Z', dti:'DTID/T9B3X8H2K', purp:'SUPP',
+         custody:'FULL_CUSTODY', slip:'0.001',
+         quoteid:'',
+         trid:'660f9511-f3ac-52e5-b827-557766551133',
+         inv:'INV-TF-2026-04231', ustrd:'Supplier payment INV-TF-2026-04231 / contract ACME-TF-2026-Q2' },
+    parties: { dname:'TechFlow Singapore Pte Ltd', dlei:'9598005H8H0HE9JJZB55', dctry:'SG',
+               dwallet:'0x14e29B6e4f0C2C4f0bD2A5eA43b8e0A9e5d4c8C12',
+               daname:'', dalei:'', dabic:'',
+               cname:'Acme Components Ltd', clei:'529900XYZ4567ABCD123', cctry:'HK',
+               cwallet:'0x9b2C8aC4D5e8F2A7B4c9D6e3F1aA8B5c7D9eF2A4',
+               caname:'Coinbase Asia Pte Ltd', calei:'5493007A8B7BG3DJK1E32' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
+    ramp: { ramptype:'NONE' },
+    v13_flag: 'corporate_to_vasp'
+  },
+  usdc_self_custody: {
+    method: 'POST',
+    info: '<strong>Self-custody reconciliation record (v1.3, SELF_CUSTODY)</strong><br/>Global Industries Plc (UK corporate, own node + HSM) executed a 120,000 USDC transfer to a supplier wallet <strong>itself</strong>. It now records the transaction with its partner VASP (Coinbase Custody UK) for reconciliation. <code>custody_model = SELF_CUSTODY</code>. <code>debtor_agent</code> is omitted because the corporate signed itself. The VASP does not sign or broadcast; it only mirrors the position.',
+    f: { e2e:'E2E-GLOBIND-SUP-20260520-002', uetr:'ddeeff00-1111-2222-3333-aabbccddee99',
+         amt:'120000.000000', ccy:'USD', fiat:'120000.00', fiatccy:'USD',
+         expiry:'2026-05-20T18:00:00Z', dti:'DTID/T9B3X8H2K', purp:'SUPP',
+         custody:'SELF_CUSTODY', slip:'',
+         quoteid:'',
+         trid:'770e8400-e29b-41d4-a716-446655441234',
+         inv:'INV-GI-2026-00871', ustrd:'Supplier payment per contract GI-IP-2026-Q2 / INV-GI-2026-00871' },
+    parties: { dname:'Global Industries Plc', dlei:'213800ABC123DEF45678', dctry:'GB',
+               dwallet:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7',
+               daname:'', dalei:'', dabic:'',
+               cname:'Industrial Parts Ltd', clei:'529900PQR4567STU90123', cctry:'IE',
+               cwallet:'0x77aB4C8d9E2f1A3B5C7D9E0F2A4B6C8D0E2F4A6B',
+               caname:'Coinbase Custody UK Ltd', calei:'549300UK7B8CC9DJK1F84' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
+    ramp: { ramptype:'NONE' },
+    v13_flag: 'self_custody'
   },
   onramp: {
     method: 'POST',
@@ -753,38 +861,8 @@ const SCENARIOS = {
   },
   cancel: {
     method: 'DELETE',
-    info: '<strong>CANCEL — camt.056 → camt.029 ACCR (accepted)</strong><br/>Instruction still in PENDING status (not yet broadcast). DELETE accepts optional <code style="font-family:var(--mono);font-size:9px">CancellationRequest</code> body with camt.056 <code style="font-family:var(--mono);font-size:9px">reason_code</code>. Response carries <code style="font-family:var(--mono);font-size:9px">cancellation_resolution_status = ACCR</code> (camt.029). No HTTP error for the accept path.',
+    info: '<strong>DELETE — Cancel pending instruction</strong><br/>Instruction is in PENDING status (not yet broadcast). Cancellation accepted. Had the transaction been in the mempool (BROADCAST), cancellation would have returned 409 CANCELLATION_TOO_LATE.',
     f: { uetr:'770a0622-a4bd-63f6-c938-668877662264' }
-  },
-  cancel_rejected: {
-    method: 'DELETE',
-    info: '<strong>CANCEL — camt.056 → camt.029 RJCR (too late)</strong><br/>Cancellation request arrived 400ms after the VASP had already broadcast the transaction. Response is HTTP 200 with <code style="font-family:var(--mono);font-size:9px">cancellation_resolution_status = RJCR</code>. This is structured data, not an HTTP error — the cancellation request itself succeeded, but the cancellation could not be effected. Instruction continues to FINAL.',
-    f: { uetr:'880b1733-b5ce-74c7-d049-779988773375' }
-  },
-  status_req: {
-    method: 'STATUSREQ',
-    info: '<strong>STATUS-REQ — pacs.028 analogue</strong><br/>Instructing party has not received a status update since broadcast_at + 3h and proactively requests a fresh on-chain evaluation. <code style="font-family:var(--mono);font-size:9px">refresh_from_chain = true</code>. VASP re-queries the chain, returns full <code style="font-family:var(--mono);font-size:9px">InstructionStatusResponse</code> with dual-layer status and complete <code style="font-family:var(--mono);font-size:9px">status_history</code>.',
-    f: { uetr:'550e8400-e29b-41d4-a716-446655440099' }
-  },
-  erc3643: {
-    method: 'POST',
-    info: '<strong>ERC-3643 regulated security token + EAS attestation</strong><br/>Tokenised money-market fund share issued under EU MiCA. Transfer requires on-chain compliance proof — <code style="font-family:var(--mono);font-size:9px">credential_attestation</code> references an EAS attestation of the creditor\'s investor eligibility. VASP verifies against the ERC-3643 trusted attester registry pre-execution.',
-    f: { e2e:'E2E-BLKRK-MMF-20260423-001', uetr:'aa11bb22-cc33-4dd4-9ee5-ff6677889900',
-         amt:'500000.000000', ccy:'USD', fiat:'', fiatccy:'',
-         expiry:'2026-04-23T20:00:00Z', dti:'DTID/BK3FXY8MQ', purp:'INVS',
-         custody:'FULL_CUSTODY', slip:'0.001', quoteid:'', trid:'',
-         inv:'MMF-SUB-2026-0078', ustrd:'Subscription MMF-SUB-2026-0078 / Q2 allocation' },
-    parties: { dname:'Acme Treasury Holdings GmbH', dlei:'529900T8BM49AURSDO55', dctry:'DE',
-               dwallet:'0x8f9e4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f',
-               daname:'Deutsche Bank AG', dalei:'7LTWFZYICNSX8D621K86', dabic:'DEUTDEFFXXX',
-               cname:'Acme Treasury Holdings GmbH', clei:'529900T8BM49AURSDO55', cctry:'DE',
-               cwallet:'0xa3b4c5d6e7f8091a2b3c4d5e6f7081929a3b4c5d',
-               caname:'SocGen FORGE SAS', calei:'969500QTQEMMZROQ0P81' },
-    chain: { chain:'DLID/X9J9XDMTD', tokendti:'BK3FXY8MQ', tokensym:'BUIDL',
-             contract:'0x7712c34205737192402172409a4f446f4e0b4e5e', tokstd:'ERC-3643',
-             issuer:'BlackRock USD Institutional Digital Liquidity Fund',
-             issuerlei:'5493003YXDWRM0T9V463' },
-    ramp: { ramptype:'NONE' }
   },
   search_basic: {
     method: 'SEARCH',
@@ -792,6 +870,86 @@ const SCENARIOS = {
     sr: { 'sr-from':'2025-06-01T00:00:00Z', 'sr-to':'2025-06-30T23:59:59Z',
           'sr-status':'FINAL', 'sr-chain':'X9J9XDMTD', 'sr-token':'T9B3X8H2K',
           'sr-page':'50' }
+  },
+  delegated_hash: {
+    method: 'POST',
+    info: '<strong>Delegated signing — compact hash format</strong><br/>VASP returns a precomputed signing hash plus VASP-signed cross-check fields (instruction ID, chain, recipient, <strong>amount</strong>) instead of the full transaction. The HSM signs the opaque hash; the application layer verifies the cross-checks before forwarding. Suitable only for trusted-VASP relationships — see the API description for the security implications.',
+    f: { e2e:'E2E-2025-DLG-002', uetr:'', amt:'500000.000000', ccy:'USD', expiry:'',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'DELEGATED_SIGNING',
+         signfmt:'COMPACT_HASH', slip:'', quoteid:'',
+         trid:'aa550e84-b29c-4d4e-a716-446655440801', inv:'', ustrd:'Compact-hash delegated signing demonstration' },
+    parties: { dname:'Vertex Capital US LLC', dlei:'5493006D7HJB0WC32X45', dctry:'US',
+               dwallet:'0x14e29B6e4f0C2C4f0bD2A5eA43b8e0A9e5d4c8C12',
+               daname:'Vertex Treasury HSM', dalei:'5493006D7HJB0WC32X45',
+               cname:'TechFlow Singapore Pte Ltd', clei:'9598005H8H0HE9JJZB55', cctry:'SG',
+               cwallet:'0x9b2C8aC4D5e8F2A7B4c9D6e3F1aA8B5c7D9eF2A4',
+               caname:'Coinbase Asia Pte Ltd', calei:'5493007A8B7BG3DJK1E32' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' }
+  },
+  return_ac01: {
+    method: 'RETURNS',
+    info: '<strong>POST /instruction/{id}/return — Wrong wallet address (AC01)</strong><br/>Receiving VASP discovers the original transfer was credited to a wallet not belonging to the intended customer. Issues a compensating return — a new on-chain transaction in the opposite direction, linked to the original by reference. The original instruction stays at FINAL on-chain (the chain does not forget); a derived <code>returned: true</code> flag is set on its record.',
+    f: { e2e:'RTN-2026-04823', uetr:'', amt:'10000.000000', ccy:'USD',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'FULL_CUSTODY',
+         retreason:'AC01', retorigid:'7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c',
+         retoriguetr:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+         retorigtxhash:'0xabcd1234ef567890abcd1234ef567890abcd1234ef567890abcd1234ef567890',
+         retaddinfo:'Wallet address did not match registered customer' }
+  },
+  return_canc: {
+    method: 'RETURNS',
+    info: '<strong>POST /instruction/{id}/return — Post-settlement cancellation (CANC)</strong><br/>Original sender requests cancellation after settlement. Receiver cooperates and issues a compensating return for the full amount. CANC covers the "I sent this by mistake, please send it back" case — operationally identical to a return because on-chain there is no other mechanism: the funds have arrived at the destination, and the holder of that wallet must cooperate to send them back.',
+    f: { e2e:'RTN-2026-04824', uetr:'', amt:'5000.000000', ccy:'USD',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'FULL_CUSTODY',
+         retreason:'CANC', retorigid:'8a4b3c2d-9e5f-6071-8c9d-2e3f4a5b6c7d',
+         retoriguetr:'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+         retorigtxhash:'0xdef9876543210fedcba9876543210fedcba9876543210fedcba9876543210fed',
+         retaddinfo:'Cancellation requested by originator — error in payment' }
+  },
+  return_rr04: {
+    method: 'RETURNS',
+    info: '<strong>POST /instruction/{id}/return — Regulatory reason (RR04)</strong><br/>Return for a regulatory reason. Note: <code>additional_information</code> is deliberately empty. Populating it with details of a sanctions match would constitute tipping off — a criminal offence under EU AMLD Article 39, UK POCA 2002, and US Bank Secrecy Act. The same discipline as the unexplained <code>FAILED</code> status applies here.',
+    f: { e2e:'RTN-2026-04825', uetr:'', amt:'25000.000000', ccy:'USD',
+         dti:'DTID/T9B3X8H2L', purp:'TRAD', custody:'FULL_CUSTODY',
+         retreason:'RR04', retorigid:'1a2b3c4d-5e6f-7080-9a0b-1c2d3e4f5a6b',
+         retoriguetr:'cccccccc-dddd-eeee-ffff-aaaaaaaaaaaa',
+         retorigtxhash:'0x2222333344445555666677778888999900001111aaaabbbbccccddddeeeeffff',
+         retaddinfo:'' }
+  },
+  reverse_frad: {
+    method: 'RETURNS',
+    info: '<strong>POST /instruction/{id}/reverse — Fraud (FRAD)</strong><br/>Sender bank discovers fraud after settlement and requests reversal from the receiving VASP. Sender does not control the destination wallet — the request is operationally a request <em>to</em> the receiver to cooperate. Two parallel state machines result: the reversal request lifecycle (REQUESTED→ACCEPTED→COMPLETED) and the compensating transaction lifecycle (PENDING→BROADCAST→CONFIRMING→FINAL). Status updates are pushed by the receiving VASP, not polled.',
+    f: { e2e:'RVS-2026-00891', uetr:'', amt:'50000.000000', ccy:'USD',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'FULL_CUSTODY',
+         revreason:'FRAD', revorigid:'2b3c4d5e-6f70-8090-a0b1-c2d3e4f5a6b7',
+         revoriguetr:'dddddddd-eeee-ffff-aaaa-bbbbbbbbbbbb',
+         revorigtxhash:'0x1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff',
+         revnarr:'Originator account confirmed compromised by our fraud team at 15:42 UTC. Account holder identity-verified the unauthorised activity. Receiving VASP cooperation requested.',
+         revwebhook:'https://vertex-bank.example.com/pacs-crypto/reversal-status' }
+  },
+  reverse_rejected: {
+    method: 'RETURNS',
+    info: '<strong>POST /instruction/{id}/reverse — Rejected (OTHER)</strong><br/>The receiving VASP rejects the reversal request using code <code>OTHER</code>. The structured rejection vocabulary deliberately omits any regulatory code (no <code>RR04</code> here): introducing one would create a tipping-off vocabulary even when the intent is the opposite. <code>OTHER</code> absorbs both routine and sensitive cases together; the sender cannot infer that a particular rejection is sanctions-related, because most <code>OTHER</code> rejections in practice are routine.',
+    f: { e2e:'RVS-2026-00894', uetr:'', amt:'12000.000000', ccy:'USD',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'FULL_CUSTODY',
+         revreason:'CUST', revorigid:'5e6f7080-90a0-b1c2-d3e4-f5a6b7c8d9e0',
+         revoriguetr:'ffffffff-aaaa-bbbb-cccc-dddddddddddd',
+         revorigtxhash:'0x3333444455556666777788889999000011112222aaaabbbbccccddddeeeeffff',
+         revnarr:'Customer requests reversal of payment sent in error.',
+         revwebhook:'https://example-bank.com/pacs-crypto/reversal-status' }
+  },
+  reverse_withdrawn: {
+    method: 'RETURNS',
+    info: '<strong>POST /instruction/{id}/reverse — Withdrawn before receiver response</strong><br/>Sender withdraws the reversal request before the receiving VASP has responded. Demonstrates the WITHDRAWN status in the reversal request lifecycle — useful when subsequent investigation reveals the original transaction was not in fact erroneous.',
+    f: { e2e:'RVS-2026-00895', uetr:'', amt:'7500.000000', ccy:'USD',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'FULL_CUSTODY',
+         revreason:'CUST', revorigid:'6f708090-a0b1-c2d3-e4f5-a6b7c8d9e0f1',
+         revoriguetr:'aaaabbbb-cccc-dddd-eeee-ffffaaaabbbb',
+         revorigtxhash:'0x4444555566667777888899990000111122223333aaaabbbbccccddddeeeeffff',
+         revnarr:'Withdrawing reversal request after internal review.',
+         revwebhook:'https://example-bank.com/pacs-crypto/reversal-status' }
   }
 };
 
@@ -829,34 +987,7 @@ function buildReq() {
     };
   }
   if (method === 'GET' || method === 'DELETE') {
-    const req = { _type: method, instruction_id: g('f-uetr') || '550e8400-e29b-41d4-a716-446655440099' };
-    // For DELETE, attach optional CancellationRequest body (camt.056 aligned)
-    if (method === 'DELETE') {
-      const scenKey = document.getElementById('scen').value;
-      if (scenKey === 'cancel') {
-        req.cancellation_request = {
-          reason_code: 'CUST',
-          reason_text: 'Customer retracted the instruction after reviewing quote'
-        };
-      } else if (scenKey === 'cancel_rejected') {
-        req.cancellation_request = {
-          reason_code: 'CUST',
-          reason_text: 'Customer retracted after chain congestion review'
-        };
-      }
-    }
-    return req;
-  }
-  if (method === 'STATUSREQ') {
-    return {
-      _type: 'STATUSREQ',
-      instruction_id: g('f-uetr') || '550e8400-e29b-41d4-a716-446655440099',
-      status_request: {
-        request_id: '98765432-1234-4abc-9def-123456789abc',
-        request_reason: 'No status update received since broadcast_at + 3h',
-        refresh_from_chain: true
-      }
-    };
+    return { _type: method, instruction_id: g('f-uetr') || '550e8400-e29b-41d4-a716-446655440099' };
   }
   if (method === 'SEARCH') {
     return { _type:'SEARCH',
@@ -865,6 +996,49 @@ function buildReq() {
       chain_dli: g('f-sr-chain') || undefined,
       token_dti: g('f-sr-token') || undefined,
       page_size: parseInt(g('f-sr-page')) || 50
+    };
+  }
+  if (method === 'RETURNS') {
+    // Distinguish return vs reversal by which fields are populated.
+    // f-retreason set => return; f-revreason set => reversal.
+    const retReason = g('f-retreason');
+    const revReason = g('f-revreason');
+    const isReversal = !!revReason;
+    if (isReversal) {
+      return { _type: 'REVERSE',
+        reversal_identification: g('f-e2e') || 'RVS-2026-00001',
+        reversed_amount: { amount: g('f-amt') || '0', currency: g('f-ccy') || 'USD' },
+        reversal_reason: {
+          code: revReason,
+          additional_information: g('f-revnarr') ? [g('f-revnarr').slice(0,105)] : undefined
+        },
+        request_narrative: g('f-revnarr') || undefined,
+        original_transaction_reference: {
+          original_instruction_id: g('f-revorigid') || undefined,
+          original_uetr: g('f-revoriguetr') || undefined,
+          original_transaction_hash: g('f-revorigtxhash') || undefined,
+          original_settlement_amount: { amount: g('f-amt') || '0', currency: g('f-ccy') || 'USD' },
+          original_finality_status: 'FINAL'
+        },
+        webhook_url: g('f-revwebhook') || undefined,
+        contact_for_questions: { name:'Bank Operations', email:'ops@example-bank.com' }
+      };
+    }
+    // Return
+    return { _type: 'RETURN',
+      return_identification: g('f-e2e') || 'RTN-2026-00001',
+      returned_amount: { amount: g('f-amt') || '0', currency: g('f-ccy') || 'USD' },
+      return_reason: {
+        code: retReason || 'AC01',
+        additional_information: g('f-retaddinfo') ? [g('f-retaddinfo').slice(0,105)] : undefined
+      },
+      original_transaction_reference: {
+        original_instruction_id: g('f-retorigid') || undefined,
+        original_uetr: g('f-retoriguetr') || undefined,
+        original_transaction_hash: g('f-retorigtxhash') || undefined,
+        original_settlement_amount: { amount: g('f-amt') || '0', currency: g('f-ccy') || 'USD' },
+        original_finality_status: 'FINAL'
+      }
     };
   }
 
@@ -904,25 +1078,23 @@ function buildReq() {
       country: g('f-dctry') || undefined
     },
     debtor_account: {
-      type: { proprietary: 'DIGT' },
       proxy: { type: { code: 'EWAL' }, identification: g('f-dwallet') || '0x0000…' }
     },
-    debtor_agent: {
-      name: g('f-daname') || 'Debtor Agent',
+    debtor_agent: g('f-daname') ? {
+      name: g('f-daname'),
       lei: g('f-dalei') || undefined,
       bic: g('f-dabic') || undefined
-    },
-    creditor_agent: {
-      name: g('f-caname') || 'Creditor Agent',
+    } : undefined,
+    creditor_agent: g('f-caname') ? {
+      name: g('f-caname'),
       lei: g('f-calei') || undefined
-    },
+    } : undefined,
     creditor: {
       name: g('f-cname') || 'Creditor Name',
       lei: g('f-clei') || undefined,
       country: g('f-cctry') || undefined
     },
     creditor_account: {
-      type: { proprietary: 'DIGT' },
       proxy: { type: { code: 'EWAL' }, identification: g('f-cwallet') || '0x0000…' }
     },
     instruction_for_next_agent: hasRamp && g('f-calei') ? [{
@@ -947,6 +1119,7 @@ function buildReq() {
       },
       chain_dli: chainRaw.replace('DLID/','').replace('CHAINID:',''),
       custody_model: g('f-custody') || 'FULL_CUSTODY',
+      signing_payload_format: (g('f-custody') === 'DELEGATED_SIGNING') ? (g('f-signfmt') || 'FULL_TRANSACTION') : undefined,
       maximum_slippage_rate: g('f-slip') || undefined,
       ramp_instruction: hasRamp ? {
         ramp_type: rampType,
@@ -955,14 +1128,7 @@ function buildReq() {
         maximum_ramp_slippage_rate: g('f-rampslip') || undefined,
         at_vasp_discretion: g('f-rampdiscr') === 'true'
       } : undefined
-    },
-    credential_attestation: (document.getElementById('scen').value === 'erc3643') ? {
-      schema_uid: '0x7a9e3c5b4d2f1e8a6b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a',
-      attestation_uid: '0x3f8a7b2c1d4e5f6a9b0c3d2e1f4a7d8c9b0e3f2a1d4c7b8e9f0a3d6c9b2e5f8a',
-      attester: '0x969500QTQEMMZROQ0P81aabbccddee112233445566',
-      chain_dli: 'X9J9XDMTD',
-      expiry_date_time: '2027-04-23T00:00:00Z'
-    } : undefined
+    }
   };
   return JSON.parse(JSON.stringify(body));
 }
@@ -1757,180 +1923,36 @@ function renderResponse(req) {
     return;
   }
 
-  // ── DELETE / CANCEL (camt.056 → camt.029) ────────────────────────────────
+  // ── DELETE / CANCEL ───────────────────────────────────────────────────────
   if (_type === 'DELETE') {
-    const scenKey = document.getElementById('scen').value;
-    const isRejected = scenKey === 'cancel_rejected';
-
     document.getElementById('rh').innerHTML =
       `<span class="sbadge s200">200 OK</span>
        <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">DELETE /v1/instruction/${req.instruction_id}</span>
        <span class="rt">${elapsed}ms</span>`;
-
-    if (isRejected) {
-      document.getElementById('rbody').innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
-      <div class="card" style="border-color:rgba(210,153,34,.3)">
-        <div class="ch" style="background:rgba(210,153,34,.04)">
-          <span>🚫</span><span class="ct" style="color:var(--amber)">Cancellation Rejected — camt.029 RJCR</span>
-        </div>
-        <div class="cb">
-          <div class="dr"><div class="dk">instruction_id</div>
-            <div class="dv hi">${req.instruction_id}</div></div>
-          <div class="dr"><div class="dk">cancellation_resolution_status</div>
-            <div class="dv wa" style="font-weight:700">RJCR</div></div>
-          <div class="dr"><div class="dk">status</div>
-            <div class="dv wa">BROADCAST</div></div>
-          <div class="dr"><div class="dk">cancellation_reason_code</div>
-            <div class="dv">CUST</div></div>
-          <div class="dr"><div class="dk">cancellation_reason_text</div>
-            <div class="dv" style="color:var(--muted);font-size:10px">Customer retracted after chain congestion review</div></div>
-          <div class="dr"><div class="dk">rejection_reason</div>
-            <div class="dv" style="color:var(--muted);font-size:10px">Transaction broadcast to chain 400ms before cancellation request arrived</div></div>
-          <div class="dr"><div class="dk">cancelled_at</div>
-            <div class="dv">${now}</div></div>
-        </div>
-      </div>
-      <div class="card" style="border-color:rgba(56,139,253,.3)">
-        <div class="ch" style="background:rgba(56,139,253,.04)"><span>ℹ️</span><span class="ct">Why HTTP 200 and not 409</span></div>
-        <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
-          The <strong style="color:var(--blue)">cancellation request itself succeeded</strong> — it was received,
-          authenticated, and processed. What failed was the <em>cancellation action</em>, because the transaction
-          had already been broadcast. This distinction is the whole point of the camt.029 resolution model:
-          <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">RJCR</code> is structured data
-          carrying a reason, not an HTTP error. The instruction will now continue through its natural lifecycle
-          to <code style="font-family:var(--mono);font-size:10px;color:var(--green)">FINAL</code>.
-        </div>
-      </div>
-      <div class="card">
-        <div class="ch"><span>📎</span><span class="ct">ISO 20022 Alignment</span></div>
-        <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
-          Request body followed <strong style="color:var(--text)">camt.056</strong> <code style="font-family:var(--mono);font-size:10px">FIToFIPaymentCancellationRequest</code>
-          with <code style="font-family:var(--mono);font-size:10px">reason_code</code> from
-          <code style="font-family:var(--mono);font-size:10px">ExternalCancellationReason1Code</code>.
-          Response follows <strong style="color:var(--text)">camt.029</strong> <code style="font-family:var(--mono);font-size:10px">ResolutionOfInvestigation</code>:
-          <code style="font-family:var(--mono);font-size:10px;color:var(--green)">ACCR</code> (accepted),
-          <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">RJCR</code> (rejected),
-          <code style="font-family:var(--mono);font-size:10px">PDCR</code> (pending).
-        </div>
-      </div>
-      </div>`;
-      return;
-    }
-
-    // camt.029 ACCR — cancellation accepted
     document.getElementById('rbody').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
-    <div class="card" style="border-color:rgba(63,185,80,.25)">
-      <div class="ch" style="background:rgba(63,185,80,.04)">
-        <span>🗑️</span><span class="ct" style="color:var(--green)">Cancellation Accepted — camt.029 ACCR</span>
+    <div class="card" style="border-color:rgba(248,81,73,.25)">
+      <div class="ch" style="background:rgba(248,81,73,.04)">
+        <span>🗑️</span><span class="ct">Instruction Cancelled</span>
       </div>
       <div class="cb">
         <div class="dr"><div class="dk">instruction_id</div>
           <div class="dv hi">${req.instruction_id}</div></div>
-        <div class="dr"><div class="dk">cancellation_resolution_status</div>
-          <div class="dv ok" style="font-weight:700">ACCR</div></div>
         <div class="dr"><div class="dk">status</div>
           <div class="dv er" style="font-weight:700">CANCELLED</div></div>
-        <div class="dr"><div class="dk">cancellation_reason_code</div>
-          <div class="dv">CUST</div></div>
-        <div class="dr"><div class="dk">cancellation_reason_text</div>
-          <div class="dv" style="color:var(--muted);font-size:10px">Customer retracted the instruction after reviewing quote</div></div>
+        <div class="dr"><div class="dk">previous_status</div>
+          <div class="dv" style="color:var(--blue)">PENDING</div></div>
         <div class="dr"><div class="dk">cancelled_at</div>
           <div class="dv">${now}</div></div>
       </div>
     </div>
     <div class="card">
-      <div class="ch"><span>📎</span><span class="ct">ISO 20022 Alignment — camt.056 / camt.029</span></div>
+      <div class="ch"><span>ℹ️</span><span class="ct">Cancellation Window</span></div>
       <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
-        Cancellation request optionally carries a <strong style="color:var(--text)">camt.056</strong>-aligned
-        <code style="font-family:var(--mono);font-size:10px">CancellationRequest</code> body with
-        <code style="font-family:var(--mono);font-size:10px">reason_code</code>
-        (<code style="font-family:var(--mono);font-size:10px">CUST</code>,
-        <code style="font-family:var(--mono);font-size:10px">DUPL</code>,
-        <code style="font-family:var(--mono);font-size:10px">AM09</code>,
-        <code style="font-family:var(--mono);font-size:10px">TECH</code>,
-        <code style="font-family:var(--mono);font-size:10px">FRAD</code>, …).<br/>
-        Response returns <strong style="color:var(--text)">camt.029</strong>-aligned
-        <code style="font-family:var(--mono);font-size:10px;color:var(--green)">ACCR</code>.
-        Had the transaction been in the mempool, the response would have been
-        <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">RJCR</code>
-        as structured data (HTTP 200) — not an HTTP 409 — so the instructing party can parse
-        the outcome consistently.
-      </div>
-    </div>
-    </div>`;
-    return;
-  }
-
-  // ── STATUS-REQ (pacs.028 analogue) ────────────────────────────────────────
-  if (_type === 'STATUSREQ') {
-    const iid = req.instruction_id;
-    document.getElementById('rh').innerHTML =
-      `<span class="sbadge s200">200 OK</span>
-       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/instruction/${iid}/status-request</span>
-       <span class="rt">${elapsed}ms</span>`;
-    document.getElementById('rbody').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
-    <div class="card" style="border-color:rgba(188,140,255,.3)">
-      <div class="ch" style="background:rgba(188,140,255,.04)">
-        <span>📡</span><span class="ct" style="color:var(--purple)">pacs.028 Status Request — Fresh Evaluation</span>
-      </div>
-      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
-        Chain re-queried at <strong style="color:var(--text)">${now}</strong>.
-        Confirmation depth, finality state, and gas consumption refreshed from the
-        network. Response is the same <code style="font-family:var(--mono);font-size:10px">InstructionStatusResponse</code>
-        schema as <code style="font-family:var(--mono);font-size:10px">GET /instruction/{id}</code> —
-        dual-layer status plus full <code style="font-family:var(--mono);font-size:10px">status_history</code>.
-      </div>
-    </div>
-    <div class="card" style="border-color:rgba(63,185,80,.25)">
-      <div class="ch" style="background:rgba(63,185,80,.04)">
-        <span>✅</span><span class="ct" style="color:var(--green)">Current Status — Dual Layer</span>
-      </div>
-      <div class="cb">
-        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
-        <div class="dr"><div class="dk">iso_status <span style="color:var(--dim);font-size:9px">(pacs.002)</span></div>
-          <div class="dv ok" style="font-weight:700">ACSC</div></div>
-        <div class="dr"><div class="dk">blockchain_status</div>
-          <div class="dv ok" style="font-weight:700">FINAL</div></div>
-        <div class="dr"><div class="dk">finality_status</div>
-          <div class="dv ok">FINAL (Ethereum checkpoint)</div></div>
-        <div class="dr"><div class="dk">confirmation_depth</div>
-          <div class="dv ok">24 / 12 required ✓</div></div>
-        <div class="dr"><div class="dk">tx_hash</div>
-          <div class="dv addr">0xa3f8d2c1b4e7f6a9d0c3b2e1f4a7d8c9b0e3f2a1d4c7b8e9f0a3d6c9b2e5f8</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="ch"><span>📜</span><span class="ct">status_history — Full Transition Log</span></div>
-      <div class="cb" style="font-size:10px;line-height:1.8">
-        <div style="display:grid;grid-template-columns:auto auto 1fr;gap:8px;font-family:var(--mono)">
-          <span style="color:var(--dim)">2026-04-23T11:30:02Z</span>
-          <span><span class="status-pill st-pending">PDNG</span> PENDING</span>
-          <span style="color:var(--muted)">VASP received and validated</span>
-
-          <span style="color:var(--dim)">2026-04-23T11:30:08Z</span>
-          <span><span class="status-pill st-confirming">ACSP</span> BROADCAST</span>
-          <span style="color:var(--muted)">tx broadcast to Ethereum mainnet</span>
-
-          <span style="color:var(--dim)">2026-04-23T11:30:22Z</span>
-          <span><span class="status-pill st-confirming">ACSP</span> CONFIRMING</span>
-          <span style="color:var(--muted)">included block 21847392 (depth 1)</span>
-
-          <span style="color:var(--dim)">2026-04-23T11:43:35Z</span>
-          <span><span class="status-pill st-final">ACSC</span> FINAL</span>
-          <span style="color:var(--muted)">checkpoint finality achieved (depth 12+)</span>
-        </div>
-      </div>
-    </div>
-    <div class="card" style="border-color:rgba(56,139,253,.3)">
-      <div class="ch" style="background:rgba(56,139,253,.04)"><span>ℹ️</span><span class="ct">When to use vs GET</span></div>
-      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
-        <strong style="color:var(--text)">GET</strong> returns the cached status — cheap, good for frequent polling.<br/>
-        <strong style="color:var(--text)">STATUS-REQ (pacs.028)</strong> explicitly re-evaluates on-chain state — more expensive,
-        authoritative. Use when an expected status update has not arrived within a reasonable time window,
-        or when authoritative state is required before taking a downstream action.
+        Cancellation is only possible in <strong style="color:var(--blue)">PENDING</strong> or
+        <strong style="color:var(--blue)">QUOTED</strong> status — before the transaction is
+        broadcast to the network. Once in <code style="font-family:var(--mono);font-size:10px">BROADCAST</code>
+        or beyond, the VASP returns <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">409 CANCELLATION_TOO_LATE</code>.
       </div>
     </div>
     </div>`;
@@ -1990,6 +2012,262 @@ function renderResponse(req) {
     return;
   }
 
+  // ── RETURN (pacs.004 analogue) ───────────────────────────────────────────
+  if (_type === 'RETURN') {
+    const compId = '9a8b7c6d-5e4f-3210-fedc-ba9876543210';
+    const compUetr = 'ffffeeee-dddd-cccc-bbbb-aaaa00001111';
+    const origId = req.original_transaction_reference?.original_instruction_id || 'unknown';
+    const reasonCode = req.return_reason?.code || 'AC01';
+    const reasonText = {
+      'AC01':'Wrong wallet address','CANC':'Post-settlement cancellation',
+      'RR04':'Regulatory reason','FRAD':'Fraudulent originator','TECH':'Technical problem',
+      'AC04':'Account closed','AM05':'Duplication','BE04':'Missing creditor address','NARR':'Narrative'
+    }[reasonCode] || reasonCode;
+    const isRR04 = reasonCode === 'RR04';
+    const addInfo = req.return_reason?.additional_information?.[0] || '';
+
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200" style="background:rgba(188,140,255,.15);color:var(--purple)">202 ACCEPTED</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/instruction/${origId.slice(0,8)}…/return</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+    <div class="card" style="border-color:rgba(188,140,255,.3)">
+      <div class="ch" style="background:rgba(188,140,255,.05)">
+        <span>↩️</span><span class="ct" style="color:var(--purple)">Compensating Return Issued</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">compensating_instruction_id</div>
+          <div class="dv hi">${compId}</div></div>
+        <div class="dr"><div class="dk">compensating_uetr</div>
+          <div class="dv">${compUetr}</div></div>
+        <div class="dr"><div class="dk">return_identification</div>
+          <div class="dv">${req.return_identification || '—'}</div></div>
+        <div class="dr"><div class="dk">return_reason</div>
+          <div class="dv"><span class="apill" style="background:rgba(188,140,255,.1);color:var(--purple);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">${reasonCode}</span> · ${reasonText}</div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--blue);font-weight:700">PENDING</div></div>
+        <div class="dr"><div class="dk">accepted_at</div><div class="dv">${now}</div></div>
+        <div class="dr"><div class="dk">estimated_finality_at</div>
+          <div class="dv ok">${new Date(Date.now()+13*60*1000).toISOString()}</div></div>
+      </div>
+    </div>
+
+    <div class="agrid">
+      <div class="card" style="border-color:rgba(63,185,80,.25)">
+        <div class="ch" style="background:rgba(63,185,80,.04)">
+          <span>✅</span><span class="ct" style="font-size:11px">Original Instruction</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">id</div>
+            <div class="dv hi" style="font-size:10px">${origId.slice(0,16)}…</div></div>
+          <div class="dr"><div class="dk">status</div>
+            <div class="dv" style="color:var(--green);font-weight:700">FINAL</div></div>
+          <div class="dr"><div class="dk">returned</div>
+            <div class="dv"><span style="background:rgba(188,140,255,.15);color:var(--purple);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px;font-weight:700">true</span></div></div>
+          <div class="dr"><div class="dk">comp. id</div>
+            <div class="dv" style="font-size:10px">${compId.slice(0,16)}…</div></div>
+        </div>
+      </div>
+      <div class="card" style="border-color:rgba(188,140,255,.3)">
+        <div class="ch" style="background:rgba(188,140,255,.04)">
+          <span>↩️</span><span class="ct" style="font-size:11px">Compensating Tx</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">id</div>
+            <div class="dv hi" style="font-size:10px">${compId.slice(0,16)}…</div></div>
+          <div class="dr"><div class="dk">status</div>
+            <div class="dv" style="color:var(--blue);font-weight:700">PENDING</div></div>
+          <div class="dr"><div class="dk">amount</div>
+            <div class="dv">${req.returned_amount?.amount || '0'} ${req.returned_amount?.currency || ''}</div></div>
+          <div class="dr"><div class="dk">orig. ref</div>
+            <div class="dv" style="font-size:10px">${origId.slice(0,16)}…</div></div>
+        </div>
+      </div>
+    </div>
+
+    ${isRR04 ? `
+    <div class="card" style="border-color:rgba(210,153,34,.3);background:rgba(210,153,34,.04)">
+      <div class="ch" style="background:rgba(210,153,34,.05)">
+        <span>⚠️</span><span class="ct" style="color:var(--amber)">Tipping-Off Discipline — RR04</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">additional_information</code> is deliberately empty for <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">RR04</code>.
+        Populating it with sanctions-screening detail would constitute tipping off — a criminal offence under EU AMLD Article 39, UK POCA 2002, and US Bank Secrecy Act.
+        The pattern is identical to the unexplained <code style="font-family:var(--mono);font-size:10px">FAILED</code> status: the sender has no entitlement to know why, and must rely on its own independent compliance review.
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="card">
+      <div class="ch"><span>ℹ️</span><span class="ct">Compensating Transaction Semantics</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        On-chain transactions cannot be reversed once final. The compensating transaction is a <strong style="color:var(--text)">new on-chain transfer in the opposite direction</strong>, linked to the original by <code style="font-family:var(--mono);font-size:10px">original_transaction_hash</code>. The original stays at <code style="font-family:var(--mono);font-size:10px;color:var(--green)">FINAL</code> on-chain — the chain itself does not forget — and a derived <code style="font-family:var(--mono);font-size:10px;color:var(--purple)">returned: true</code> flag is set.
+      </div>
+    </div>
+
+    ${addInfo ? `
+    <div class="card">
+      <div class="ch"><span>📝</span><span class="ct">Additional Information</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6;font-style:italic">${addInfo}</div>
+    </div>
+    ` : ''}
+    </div>`;
+    return;
+  }
+
+  // ── REVERSE (pacs.007 analogue) ──────────────────────────────────────────
+  if (_type === 'REVERSE') {
+    const reqId = '7c4d3e2f-1a0b-9c8d-7e6f-5a4b3c2d1e0f';
+    const origId = req.original_transaction_reference?.original_instruction_id || 'unknown';
+    const reasonCode = req.reversal_reason?.code || 'FRAD';
+    const reasonText = {
+      'DUPL':'Duplicate payment','FRAD':'Fraudulent payment','TECH':'Technical problem',
+      'CUST':'Customer requested','UPAY':'Underpayment','CANC':'Cancellation','NARR':'Narrative'
+    }[reasonCode] || reasonCode;
+    const scenKey = document.getElementById('scen').value;
+    const isWithdrawn = scenKey === 'reverse_withdrawn';
+    const isRejected = scenKey === 'reverse_rejected';
+    const compId = '8b3d2c1e-4f50-6a78-9b0c-d1e2f3a4b5c6';
+
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200" style="background:rgba(188,140,255,.15);color:var(--purple)">202 ACCEPTED</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/instruction/${origId.slice(0,8)}…/reverse</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+    <div class="card" style="border-color:rgba(188,140,255,.3)">
+      <div class="ch" style="background:rgba(188,140,255,.05)">
+        <span>⏮️</span><span class="ct" style="color:var(--purple)">Reversal Request Submitted</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">reversal_request_id</div>
+          <div class="dv hi">${reqId}</div></div>
+        <div class="dr"><div class="dk">reversal_identification</div>
+          <div class="dv">${req.reversal_identification || '—'}</div></div>
+        <div class="dr"><div class="dk">reversal_reason</div>
+          <div class="dv"><span class="apill" style="background:rgba(188,140,255,.1);color:var(--purple);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">${reasonCode}</span> · ${reasonText}</div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--amber);font-weight:700">REQUESTED</div></div>
+        <div class="dr"><div class="dk">requested_at</div><div class="dv">${now}</div></div>
+        <div class="dr"><div class="dk">webhook_url</div>
+          <div class="dv" style="font-size:10px;font-family:var(--mono)">${req.webhook_url || 'bilateral default'}</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.04)">
+        <span>📬</span><span class="ct">Push Notifications Expected</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        The receiving VASP will push <code style="font-family:var(--mono);font-size:10px;color:var(--blue)">ReversalStatusUpdate</code> notifications to <code style="font-family:var(--mono);font-size:10px">webhook_url</code> at every status transition. Polling <code style="font-family:var(--mono);font-size:10px">GET /reversal-status</code> remains available as a fallback for missed pushes, audit, and reconciliation.
+      </div>
+    </div>
+
+    ${isWithdrawn ? `
+    <div class="card" style="border-color:rgba(210,153,34,.35)">
+      <div class="ch" style="background:rgba(210,153,34,.05)">
+        <span>↻</span><span class="ct" style="color:var(--amber)">Sender Withdrawal — Push 1 of 1</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_event</div>
+          <div class="dv"><span class="apill" style="background:rgba(210,153,34,.1);color:var(--amber);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">WITHDRAWN_ACKNOWLEDGED</span></div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--amber);font-weight:700">WITHDRAWN</div></div>
+        <div class="dr"><div class="dk">emitted_at</div>
+          <div class="dv">${new Date(Date.now()+8*60*1000).toISOString()}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>ℹ️</span><span class="ct">Withdrawal Semantics</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        Sender pulled the request before the receiving VASP responded. No compensating transaction is issued. Useful when subsequent investigation reveals the original was not in fact erroneous.
+      </div>
+    </div>
+    ` : isRejected ? `
+    <div class="card" style="border-color:rgba(248,81,73,.3)">
+      <div class="ch" style="background:rgba(248,81,73,.05)">
+        <span>🚫</span><span class="ct" style="color:var(--red)">Receiver Response — Push 1 of 1</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_event</div>
+          <div class="dv"><span class="apill" style="background:rgba(248,81,73,.1);color:var(--red);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">INITIAL_RESPONSE</span></div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--red);font-weight:700">REJECTED</div></div>
+        <div class="dr"><div class="dk">rejection_reason_code</div>
+          <div class="dv"><span class="apill" style="background:rgba(248,81,73,.08);color:var(--red);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">OTHER</span></div></div>
+        <div class="dr"><div class="dk">rejection_reason</div>
+          <div class="dv" style="color:var(--dim);font-style:italic">— not provided —</div></div>
+        <div class="dr"><div class="dk">emitted_at</div>
+          <div class="dv">${new Date(Date.now()+45*60*1000).toISOString()}</div></div>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(210,153,34,.3);background:rgba(210,153,34,.04)">
+      <div class="ch" style="background:rgba(210,153,34,.05)">
+        <span>⚠️</span><span class="ct" style="color:var(--amber)">Sanctions-Aware Rejection Vocabulary</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        The rejection code set deliberately omits any regulatory code (no <code style="font-family:var(--mono);font-size:10px">RR04</code>): introducing one would create a tipping-off vocabulary even when the intent is the opposite. <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">OTHER</code> is the catch-all that absorbs both routine cases (operational quirks, customer-confidentiality, scheduling) and genuinely undisclosable cases. Senders cannot infer that a particular <code style="font-family:var(--mono);font-size:10px">OTHER</code> rejection is sanctions-related, because most are routine.
+      </div>
+    </div>
+    ` : `
+    <div class="card" style="border-color:rgba(63,185,80,.3)">
+      <div class="ch" style="background:rgba(63,185,80,.04)">
+        <span>📨</span><span class="ct" style="color:var(--green)">Receiver Response — Push 1 of 4</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_event</div>
+          <div class="dv"><span class="apill" style="background:rgba(63,185,80,.1);color:var(--green);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">INITIAL_RESPONSE</span></div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--green);font-weight:700">ACCEPTED</div></div>
+        <div class="dr"><div class="dk">compensating_instruction_id</div>
+          <div class="dv hi">${compId}</div></div>
+        <div class="dr"><div class="dk">emitted_at</div>
+          <div class="dv">${new Date(Date.now()+8*60*1000).toISOString()}</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(56,139,253,.3)">
+      <div class="ch" style="background:rgba(56,139,253,.04)">
+        <span>📨</span><span class="ct" style="color:var(--blue)">Compensating Lifecycle — Pushes 2 &amp; 3 of 4</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">push 2</div>
+          <div class="dv"><code style="font-family:var(--mono);font-size:10px">COMPENSATING_LIFECYCLE</code> · BROADCAST</div></div>
+        <div class="dr"><div class="dk">push 3</div>
+          <div class="dv"><code style="font-family:var(--mono);font-size:10px">COMPENSATING_LIFECYCLE</code> · CONFIRMING (3/12)</div></div>
+        <div class="dr"><div class="dk">tx hash</div>
+          <div class="dv hi" style="font-size:10px">0x9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(63,185,80,.4)">
+      <div class="ch" style="background:rgba(63,185,80,.06)">
+        <span>✅</span><span class="ct" style="color:var(--green)">Reversal Complete — Push 4 of 4</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_event</div>
+          <div class="dv"><span class="apill" style="background:rgba(63,185,80,.1);color:var(--green);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">COMPLETED</span></div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--green);font-weight:700">COMPLETED</div></div>
+        <div class="dr"><div class="dk">compensating_instruction_status</div>
+          <div class="dv" style="color:var(--green);font-weight:700">FINAL</div></div>
+        <div class="dr"><div class="dk">emitted_at</div>
+          <div class="dv">${new Date(Date.now()+15*60*1000).toISOString()}</div></div>
+      </div>
+    </div>
+    `}
+
+    <div class="card">
+      <div class="ch"><span>ℹ️</span><span class="ct">Two Parallel State Machines</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        A reversal request has its own lifecycle (REQUESTED → ACCEPTED / REJECTED / WITHDRAWN → COMPLETED) distinct from the compensating transaction's lifecycle (PENDING → BROADCAST → CONFIRMING → FINAL). The sender does not control the destination wallet — the request is operationally a request <em>to</em> the receiving VASP to cooperate. Receiver consent is bilateral.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
   // ── GET STATUS ────────────────────────────────────────────────────────────
   if (_type === 'GET') {
     const iid = req.instruction_id;
@@ -2010,17 +2288,13 @@ function renderResponse(req) {
         </div>
         <div class="cb">
           <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
-          <div class="dr"><div class="dk">iso_status <span style="color:var(--dim);font-size:9px">(pacs.002)</span></div>
-            <div class="dv er" style="font-weight:700">RJCT</div></div>
-          <div class="dr"><div class="dk">iso_status_reason_code</div>
-            <div class="dv er">SLIPPAGE_EXCEEDED <span style="color:var(--dim);font-size:9px">(pacs.crypto ext.)</span></div></div>
-          <div class="dr"><div class="dk">blockchain_status</div>
+          <div class="dr"><div class="dk">status</div>
             <div class="dv er" style="font-weight:700">SLIPPAGE_EXCEEDED</div></div>
           <div class="dr"><div class="dk">maximum_slippage_rate</div>
             <div class="dv">0.001 (0.1%)</div></div>
           <div class="dr"><div class="dk">actual_slippage_at_rejection</div>
             <div class="dv er">0.0034 (0.34%) — exceeded tolerance</div></div>
-          <div class="dr"><div class="dk">iso_status_reason_text</div>
+          <div class="dr"><div class="dk">failure_reason</div>
             <div class="dv" style="color:var(--muted);font-size:10px;line-height:1.5">
               DEX liquidity depth insufficient for 250,000 USDC at acceptable slippage.
               Available liquidity in pool: ~$180,000 within 0.1% range.
@@ -2062,9 +2336,7 @@ function renderResponse(req) {
         </div>
         <div class="cb">
           <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
-          <div class="dr"><div class="dk">iso_status <span style="color:var(--dim);font-size:9px">(pacs.002)</span></div>
-            <div class="dv wa" style="font-weight:700">ACSP</div></div>
-          <div class="dr"><div class="dk">blockchain_status</div>
+          <div class="dr"><div class="dk">status</div>
             <div class="dv wa" style="font-weight:700">CONFIRMING</div></div>
           <div class="dr"><div class="dk">finality_status</div>
             <div class="dv wa">PROBABILISTIC</div></div>
@@ -2121,9 +2393,7 @@ function renderResponse(req) {
       </div>
       <div class="cb">
         <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
-        <div class="dr"><div class="dk">iso_status <span style="color:var(--dim);font-size:9px">(pacs.002)</span></div>
-          <div class="dv ok" style="font-weight:700">ACSC</div></div>
-        <div class="dr"><div class="dk">blockchain_status</div>
+        <div class="dr"><div class="dk">status</div>
           <div class="dv ok" style="font-weight:700">FINAL</div></div>
         <div class="dr"><div class="dk">finality_status</div>
           <div class="dv ok">FINAL (Ethereum checkpoint)</div></div>
@@ -2158,33 +2428,6 @@ function renderResponse(req) {
         <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5">
           Travel Rule compliance record linked. Verify callback status in the
           pacs.crypto Travel Rule API using this record_id.
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="ch"><span>📜</span><span class="ct">status_history — pacs.002 transition log</span></div>
-      <div class="cb" style="font-size:10px;line-height:1.8">
-        <div style="display:grid;grid-template-columns:auto auto 1fr;gap:8px;font-family:var(--mono)">
-          <span style="color:var(--dim)">14:10:02Z</span>
-          <span><span class="status-pill st-pending">PDNG</span> PENDING</span>
-          <span style="color:var(--muted)">VASP validated instruction</span>
-
-          <span style="color:var(--dim)">14:10:08Z</span>
-          <span><span class="status-pill st-confirming">ACSP</span> BROADCAST</span>
-          <span style="color:var(--muted)">tx broadcast to Ethereum</span>
-
-          <span style="color:var(--dim)">14:10:35Z</span>
-          <span><span class="status-pill st-confirming">ACSP</span> CONFIRMING</span>
-          <span style="color:var(--muted)">included block 21847392 (depth 1)</span>
-
-          <span style="color:var(--dim)">14:12:35Z</span>
-          <span><span class="status-pill st-final">ACSC</span> FINAL</span>
-          <span style="color:var(--muted)">checkpoint finality (depth 12+)</span>
-        </div>
-        <div style="font-size:10px;color:var(--dim);margin-top:8px;line-height:1.5">
-          Each row records one status transition. The <code style="font-family:var(--mono);font-size:9px;color:var(--green)">iso_status</code>
-          column (left badge) is pacs.002-aligned; the <code style="font-family:var(--mono);font-size:9px">blockchain_status</code>
-          column (right label) is the pacs.crypto-granular view. Both are always populated.
         </div>
       </div>
     </div>
@@ -2243,12 +2486,15 @@ function renderResponse(req) {
       </div>
     </div>` : '';
 
-  const delegatedHtml = isDelegated ? `
+  const isDelegatedCompactHash = isDelegated && (body.blockchain_instruction?.signing_payload_format === 'COMPACT_HASH');
+  const delegatedFullHtml = (isDelegated && !isDelegatedCompactHash) ? `
     <div class="card" style="border-color:rgba(210,153,34,.3)">
       <div class="ch" style="background:rgba(210,153,34,.04)">
-        <span>🔑</span><span class="ct" style="color:var(--amber)">Unsigned Transaction — Sign &amp; Resubmit</span>
+        <span>🔑</span><span class="ct" style="color:var(--amber)">Unsigned Transaction — Full Format · Sign &amp; Resubmit</span>
       </div>
       <div class="cb">
+        <div class="dr"><div class="dk">signing_payload_format</div>
+          <div class="dv"><span class="apill" style="background:rgba(210,153,34,.1);color:var(--amber);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">FULL_TRANSACTION</span></div></div>
         <div class="dr"><div class="dk">transaction_format</div>
           <div class="dv wa">RLP_EVM</div></div>
         <div class="dr"><div class="dk">nonce</div>
@@ -2262,10 +2508,59 @@ function renderResponse(req) {
         <div style="margin-top:8px;font-size:10px;color:var(--muted);line-height:1.6">
           Sign with your HSM using nonce <strong style="color:var(--amber)">142</strong>, then POST to
           <code style="font-family:var(--mono);font-size:9px">/v1/instruction/${iid}/signed-transaction</code>
-          with <code style="font-family:var(--mono);font-size:9px">transaction_format: "RLP_EVM"</code>.
+          with <code style="font-family:var(--mono);font-size:9px">transaction_format: "RLP_EVM"</code>. The HSM constructs the hash internally from the transaction structure and can apply content-aware signing policies.
         </div>
       </div>
     </div>` : '';
+
+  const delegatedHashHtml = isDelegatedCompactHash ? `
+    <div class="card" style="border-color:rgba(188,140,255,.35)">
+      <div class="ch" style="background:rgba(188,140,255,.05)">
+        <span>🔐</span><span class="ct" style="color:var(--purple)">Signing Hash Payload — Compact Format · Verify Cross-Checks &amp; Sign Hash</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">signing_payload_format</div>
+          <div class="dv"><span class="apill" style="background:rgba(188,140,255,.1);color:var(--purple);padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:10px">COMPACT_HASH</span></div></div>
+        <div class="dr"><div class="dk">signing_hash</div>
+          <div class="dv hi" style="font-size:10px">0x4f2a8c1b9e3d7f6a5b4c8d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a</div></div>
+        <div class="dr"><div class="dk">signing_hash_algorithm</div>
+          <div class="dv wa">KECCAK256_EVM</div></div>
+        <div class="dr"><div class="dk">instruction_id ✓</div>
+          <div class="dv">${iid}</div></div>
+        <div class="dr"><div class="dk">chain_dli ✓</div>
+          <div class="dv">X9J9XDMTD</div></div>
+        <div class="dr"><div class="dk">expected_recipient ✓</div>
+          <div class="dv addr" style="font-size:10px">${body.creditor_account?.proxy?.identification || '0x9b2C…F2A4'}</div></div>
+        <div class="dr"><div class="dk">expected_amount ✓ <span style="color:var(--purple);font-size:9px">commitment</span></div>
+          <div class="dv ok" style="font-weight:700">${body.interbank_settlement_amount?.amount || '0'} ${body.interbank_settlement_amount?.currency || ''}</div></div>
+        <div class="dr"><div class="dk">nonce</div>
+          <div class="dv wa">142</div></div>
+        <div class="dr"><div class="dk">valid_until</div>
+          <div class="dv">${new Date(Date.now()+10*60*1000).toISOString()}</div></div>
+        <div class="dr"><div class="dk">vasp_signature</div>
+          <div class="dv addr" style="font-size:10px">ECDSA_P256 · key_id: vasp-ops-2026-Q2 · 0x71ab…3e8f</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(210,153,34,.3);background:rgba(210,153,34,.04)">
+      <div class="ch" style="background:rgba(210,153,34,.05)">
+        <span>⚠️</span><span class="ct" style="color:var(--amber)">Trusted-VASP Context Required</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        The HSM signs an opaque hash and cannot independently verify content. Verification responsibility shifts to the bank's application layer, which MUST verify <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">expected_recipient</code> and <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">expected_amount</code> against its record of the original instruction before forwarding the hash to the HSM. Use only with VASPs trusted under operational, legal, and compliance assurance.
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.04)">
+      <div class="ch" style="background:rgba(63,185,80,.05)">
+        <span>🔒</span><span class="ct" style="color:var(--green)">VASP Commitment via Signature</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        The <code style="font-family:var(--mono);font-size:10px;color:var(--green)">vasp_signature</code> over this payload converts <code style="font-family:var(--mono);font-size:10px">expected_amount</code> into a non-repudiation commitment. The VASP cannot later argue the hash was for a different transaction or amount — the signed payload is the binding record of what they presented.
+      </div>
+    </div>` : '';
+
+  const delegatedHtml = delegatedFullHtml + delegatedHashHtml;
 
   // Lifecycle flow
   const steps = isDelegated
@@ -2332,34 +2627,6 @@ function renderResponse(req) {
 
   ${rampHtml}
   ${delegatedHtml}
-
-  ${body.credential_attestation ? `
-  <div class="card" style="border-color:rgba(188,140,255,.3)">
-    <div class="ch" style="background:rgba(188,140,255,.04)">
-      <span>🎫</span><span class="ct" style="color:var(--purple)">Credential Attestation — EAS on-chain proof</span>
-    </div>
-    <div class="cb">
-      <div class="dr"><div class="dk">schema_uid</div>
-        <div class="dv addr">${body.credential_attestation.schema_uid.slice(0,18)}…${body.credential_attestation.schema_uid.slice(-6)}</div></div>
-      <div class="dr"><div class="dk">attestation_uid</div>
-        <div class="dv addr">${body.credential_attestation.attestation_uid.slice(0,18)}…${body.credential_attestation.attestation_uid.slice(-6)}</div></div>
-      <div class="dr"><div class="dk">attester</div>
-        <div class="dv">SocGen FORGE SAS <span style="color:var(--dim);font-size:9px">(trusted attester)</span></div></div>
-      <div class="dr"><div class="dk">chain_dli</div>
-        <div class="dv">${body.credential_attestation.chain_dli} (Ethereum Mainnet)</div></div>
-      <div class="dr"><div class="dk">expiry</div>
-        <div class="dv">${body.credential_attestation.expiry_date_time}</div></div>
-      <div class="dr"><div class="dk">verification</div>
-        <div class="dv ok">✓ Checked against ERC-3643 trusted attester registry pre-execution</div></div>
-      <div style="margin-top:8px;font-size:11px;color:var(--muted);line-height:1.6">
-        This instruction transfers a tokenised money-market fund share (ERC-3643). The token contract enforces transfer
-        eligibility on-chain by reading an EAS attestation of investor eligibility. VASP verified the attestation is
-        valid, not expired, and issued by a trusted attester in the token's registry before accepting the instruction.
-        The same reference is echoed in the
-        <code style="font-family:var(--mono);font-size:10px">InstructionStatusResponse</code> for audit completeness.
-      </div>
-    </div>
-  </div>` : ''}
 
   <div class="card">
     <div class="ch"><span>🛡️</span><span class="ct">Sanctions — Independent VASP Screening</span></div>

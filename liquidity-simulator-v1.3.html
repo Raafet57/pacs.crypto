@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blockchain Liquidity Management API v1.3 – pacs.crypto</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#21262d;
+      --border:#30363d;--border-hi:#388bfd;
+      --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+      --blue:#388bfd;--blue-bg:rgba(56,139,253,.12);
+      --green:#3fb950;--green-bg:rgba(63,185,80,.1);
+      --amber:#d29922;--amber-bg:rgba(210,153,34,.1);
+      --red:#f85149;--purple:#bc8cff;--cyan:#79c0ff;--teal:#39d353;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+
+    header{background:var(--surface);border-bottom:1px solid var(--border);height:52px;
+      display:flex;align-items:center;gap:10px;padding:0 20px;position:sticky;top:0;z-index:99}
+    .logo{width:28px;height:28px;background:linear-gradient(135deg,#7b3fd9,#bc8cff);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+    header h1{font-size:13px;font-weight:500;white-space:nowrap}
+    .hbadge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid;white-space:nowrap}
+    .hb-purple{color:var(--purple);background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.25)}
+    .hb-cyan{color:var(--cyan);background:rgba(121,192,255,.07);border-color:rgba(121,192,255,.2)}
+    .hb-amber{color:var(--amber);background:var(--amber-bg);border-color:rgba(210,153,34,.25)}
+    .hb-green{color:var(--green);background:var(--green-bg);border-color:rgba(63,185,80,.25)}
+    .hb-ver{color:var(--muted);background:var(--surface3);border-color:var(--border)}
+    .hspace{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+    .app{display:grid;grid-template-columns:320px 1fr 1fr;height:calc(100vh - 52px);overflow:hidden}
+
+    aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .sb-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .sb-tab{flex:1;padding:9px 4px;font-family:var(--mono);font-size:10px;font-weight:700;
+      background:transparent;border:none;color:var(--dim);cursor:pointer;
+      border-bottom:2px solid transparent;transition:all .15s;text-align:center}
+    .sb-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+    .sb-pane{display:none;flex:1;overflow-y:auto;padding:14px}
+    .sb-pane.active{display:block}
+
+    .sb-title{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}
+    .mtabs{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
+    .mtab{flex:1;padding:5px 3px;font-family:var(--mono);font-size:10px;font-weight:700;
+      border:1px solid var(--border);border-radius:4px;background:transparent;
+      color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;min-width:40px}
+    .mtab.ap{background:var(--green-bg);border-color:rgba(63,185,80,.4);color:var(--green)}
+    .mtab.ag{background:var(--blue-bg);border-color:rgba(56,139,253,.4);color:var(--blue)}
+    .mtab.ard{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red)}
+    .mtab.arp{background:rgba(188,140,255,.1);border-color:rgba(188,140,255,.35);color:var(--purple)}
+    .ep{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-bottom:11px;word-break:break-all}
+    .mpill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px}
+    .pp{background:rgba(63,185,80,.18);color:var(--green)}
+    .gp{background:rgba(56,139,253,.15);color:var(--blue)}
+    .rp-pill{background:rgba(248,81,73,.15);color:var(--red)}
+    .pup{background:rgba(188,140,255,.18);color:var(--purple)}
+
+    select{width:100%;background:var(--surface3);border:1px solid var(--border);
+      border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;
+      padding:7px 9px;cursor:pointer;outline:none;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%237d8590' d='M5 7L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 9px center}
+    select:focus{border-color:var(--border-hi)}
+    .si{margin-top:8px;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;font-size:11px;
+      color:var(--muted);line-height:1.6}
+    .si strong{color:var(--cyan)}
+    .fsec{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;padding:10px 0 6px;
+      border-bottom:1px solid var(--border);margin-bottom:8px;margin-top:4px}
+    .fg{margin-bottom:7px}
+    .fl{font-size:10px;font-weight:500;color:var(--muted);margin-bottom:3px;
+      display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+    .ft{font-family:var(--mono);font-size:8px;color:var(--purple);
+      background:rgba(188,140,255,.08);border:1px solid rgba(188,140,255,.2);
+      border-radius:2px;padding:0 4px}
+    .freq{font-family:var(--mono);font-size:8px;color:var(--red);
+      background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);
+      border-radius:2px;padding:0 4px}
+    input[type=text],input[type=number],textarea{width:100%;background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;color:var(--text);
+      font-family:var(--mono);font-size:11px;padding:6px 9px;outline:none;transition:border-color .15s}
+    input:focus,textarea:focus{border-color:var(--border-hi)}
+    textarea{resize:vertical;min-height:40px;line-height:1.5}
+    .callout{background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;
+      padding:8px 11px;font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+    .callout code{font-family:var(--mono);font-size:10px;color:var(--cyan);
+      background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px}
+    .callout-amber{border-left-color:var(--amber);background:rgba(210,153,34,.06);border-color:rgba(210,153,34,.2)}
+    .callout-amber code{color:var(--amber);background:rgba(210,153,34,.08)}
+    .callout-green{border-left-color:var(--green);background:rgba(63,185,80,.04);border-color:rgba(63,185,80,.2)}
+
+    .sbtn{width:100%;padding:9px;border:none;border-radius:6px;font-family:var(--mono);
+      font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em;
+      transition:all .15s;display:flex;align-items:center;justify-content:center;
+      gap:7px;margin-top:8px}
+    .sbtn.sp{background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff}
+    .sbtn.sg{background:linear-gradient(135deg,#1b6fd9,#388bfd);color:#fff}
+    .sbtn.sr{background:linear-gradient(135deg,#b62324,#f85149);color:#fff}
+    .sbtn.spu{background:linear-gradient(135deg,#7b3fd9,#bc8cff);color:#fff}
+    .sbtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+    .sbtn:active{transform:translateY(0);filter:brightness(.95)}
+
+    .panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+    .ph{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .pt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .pm{font-family:var(--mono);font-size:10px;color:var(--dim)}
+    .jv{flex:1;overflow-y:auto;padding:18px;font-family:var(--mono);font-size:11.5px;
+      line-height:1.7;background:var(--bg)}
+    .jv pre{white-space:pre-wrap;word-break:break-word}
+    .j-key{color:#79c0ff}.j-str{color:#a5d6ff}.j-num{color:#f2cc60}
+    .j-bool{color:#ff7b72}.j-null{color:var(--dim)}
+
+    .rp{display:flex;flex-direction:column;overflow:hidden}
+    .rh{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:44px}
+    .sbadge{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px}
+    .s201,.s200{background:var(--green-bg);border:1px solid rgba(63,185,80,.35);color:var(--green)}
+    .s409{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--amber)}
+    .s404,.s400,.s422{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+    .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
+    .rb{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
+    .ch{padding:9px 13px;background:var(--surface2);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:7px}
+    .ct{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .cb{padding:12px}
+    .dr{display:grid;grid-template-columns:160px 1fr;gap:6px;padding:4px 0;
+      border-bottom:1px solid var(--border);align-items:start}
+    .dr:last-child{border-bottom:none}
+    .dk{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .dv{font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-all}
+    .dv.hi{color:var(--cyan)}.dv.ok{color:var(--green)}.dv.wa{color:var(--amber)}.dv.er{color:var(--red)}
+    .dv.addr{color:var(--purple);font-size:9.5px}
+
+    .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .pbox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .prole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+    .pname{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .pdet{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:2px}
+    .paddr{font-family:var(--mono);font-size:9px;color:var(--purple);
+      background:rgba(188,140,255,.06);border-radius:3px;padding:3px 6px;margin-top:4px;word-break:break-all}
+    .agrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .abox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:8px 10px}
+    .arole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+    .aname{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .alei{font-family:var(--mono);font-size:9px;color:var(--muted)}
+    .apill{display:inline-flex;align-items:center;gap:8px;background:var(--surface3);
+      border:1px solid var(--border);border-radius:16px;padding:5px 13px;
+      font-family:var(--mono);font-size:12px;margin-bottom:6px}
+    .at{color:var(--amber);font-weight:700}.af{color:var(--dim);font-size:10px}
+    .dti-tag{color:var(--purple);font-size:9px;background:rgba(188,140,255,.07);
+      padding:1px 6px;border-radius:3px;margin-left:4px}
+
+    /* Status flow */
+    .sflow{display:flex;align-items:center;padding:8px 0}
+    .fstep{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px}
+    .fdot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border);background:var(--bg)}
+    .fdot.done{background:var(--green);border-color:var(--green)}
+    .fdot.cur{background:var(--blue);border-color:var(--blue);box-shadow:0 0 8px rgba(56,139,253,.5)}
+    .fdot.fail{background:var(--red);border-color:var(--red)}
+    .fline{flex:1;height:2px;background:var(--border);min-width:10px;margin-top:-19px}
+    .fline.done{background:var(--green)}
+    .flabel{font-family:var(--mono);font-size:7.5px;color:var(--dim);text-align:center;line-height:1.3}
+    .flabel.done{color:var(--green)}.flabel.cur{color:var(--blue)}.flabel.fail{color:var(--red)}
+
+    /* Fee breakdown */
+    .fee-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:8px}
+    .fee-box{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px;text-align:center}
+    .fee-amt{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)}
+    .fee-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
+    .fee-lock{display:inline-block;font-family:var(--mono);font-size:8px;font-weight:700;
+      padding:2px 7px;border-radius:10px;margin-top:6px}
+    .fl-capped{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .fl-exact{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .fl-indicative{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+
+    /* Chain health */
+    .congestion{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;
+      padding:2px 8px;border-radius:10px}
+    .cong-low{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .cong-med{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .cong-high{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+
+    /* Finality */
+    .fin-bar-wrap{background:var(--surface3);border-radius:4px;height:8px;margin:6px 0}
+    .fin-bar{height:8px;border-radius:4px;transition:width .6s ease}
+    .fin-prob{background:var(--amber)}
+    .fin-final{background:var(--green)}
+
+    /* Ramp flow */
+    .ramp-flow{display:flex;align-items:center;gap:6px;padding:8px;
+      background:var(--surface3);border-radius:5px;margin-bottom:8px}
+    .ramp-box{flex:1;background:var(--surface2);border:1px solid var(--border);
+      border-radius:4px;padding:6px 9px;text-align:center}
+    .ramp-label{font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:2px;text-transform:uppercase}
+    .ramp-val{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--amber)}
+    .ramp-arrow{color:var(--purple);font-size:16px;flex-shrink:0}
+
+    /* Slippage exceeded */
+    .slip-alert{background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.3);
+      border-radius:5px;padding:12px;text-align:center}
+
+    .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:10px;color:var(--dim);padding:40px;text-align:center}
+    .ei{font-size:36px;opacity:.4}.et{font-size:15px;font-style:italic;color:var(--muted)}
+    .es{font-size:11px;line-height:1.6;max-width:240px}
+    .ldots{display:flex;gap:4px;align-items:center}
+    .ldots span{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:blink 1.2s infinite}
+    .ldots span:nth-child(2){animation-delay:.2s}.ldots span:nth-child(3){animation-delay:.4s}
+    @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+    @keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .ani{animation:fi .22s ease forwards}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+    /* Search rows */
+    .sr-list{display:flex;flex-direction:column;gap:6px}
+    .sr-row{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .sr-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
+    .sr-id{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .sr-parties{font-size:11px;margin-bottom:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .sr-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+    .sr-amt{font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600}
+    .status-pill{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 7px;border-radius:10px}
+    .st-final{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .st-confirming{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .st-pending{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .st-failed,.st-slippage{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+    .st-cancelled,.st-expired{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LM</div>
+  <h1>Blockchain Liquidity Management API v1.3</h1>
+  <div class="hspace">
+    <span class="hbadge hb-ver">v1.3.0</span>
+    <span class="hbadge hb-purple">camt.050 / camt.052 / camt.009</span>
+    <span class="hbadge hb-cyan">pacs.crypto</span>
+    <span class="hbadge hb-green">OpenAPI 3.1.0</span>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside>
+  <div class="sb-tabs">
+    <button class="sb-tab active" onclick="switchTab('config')">⚙ Config</button>
+    <button class="sb-tab" onclick="switchTab('wallets')">👛 Wallets</button>
+    <button class="sb-tab" onclick="switchTab('chain')">⛓ Chain</button>
+    <button class="sb-tab" onclick="switchTab('limit')">🚦 Limit</button>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="sb-pane active" id="tab-config">
+    <div class="callout">
+      <strong style="color:var(--cyan)">camt.050/052/009 aligned:</strong>
+      Own-account liquidity moves between wallets of the same legal account holder.
+      Travel Rule does not fire — no inter-party identity exchange to perform.
+    </div>
+
+    <div class="sb-title">Operation</div>
+    <div class="mtabs">
+      <button class="mtab ap" id="tab-post" onclick="setMethod('POST_TRANSFER')">POST<br/>Transfer</button>
+      <button class="mtab" id="tab-get" onclick="setMethod('GET_TRANSFER')">GET<br/>Transfer</button>
+      <button class="mtab" id="tab-search" onclick="setMethod('SEARCH')">GET<br/>Search</button>
+    </div>
+    <div class="mtabs">
+      <button class="mtab" id="tab-pos" onclick="setMethod('GET_POSITION')">GET<br/>Position</button>
+      <button class="mtab" id="tab-lim" onclick="setMethod('GET_LIMIT')">GET<br/>Limits</button>
+      <button class="mtab arp" id="tab-amend" onclick="setMethod('POST_LIMIT')">POST<br/>Amend Limit</button>
+    </div>
+    <div class="ep" id="ep-display">
+      <span class="mpill pp" id="mp">POST</span><span id="ep-path">/v1/wallet-transfer</span>
+    </div>
+
+    <div class="sb-title" style="margin-top:4px">Load Scenario</div>
+    <select id="scen" onchange="loadScenario(this.value)">
+      <option value="">— select a scenario —</option>
+      <optgroup label="POST /wallet-transfer">
+        <option value="same_chain">🔁 Same-chain USDC, treasury rebalance</option>
+        <option value="cross_chain_cost">🌉 Cross-chain — optimise cost (Circle CCTP)</option>
+        <option value="cross_chain_time">⚡ Cross-chain — optimise time (LayerZero)</option>
+        <option value="cross_chain_finality">🛡️ Cross-chain — optimise finality</option>
+        <option value="self_custody_transfer">📋 Self-custody recording (no VASP signing)</option>
+      </optgroup>
+      <optgroup label="GET /wallet-transfer/{id}">
+        <option value="get_final">✅ FINAL — same-chain settled</option>
+        <option value="get_broadcasting">⏳ BROADCAST — awaiting finality</option>
+        <option value="bridge_stuck">⚠️ BRIDGE_STUCK — mid-flight failure</option>
+      </optgroup>
+      <optgroup label="GET /wallet-transfer/search">
+        <option value="search_open">🔎 SEARCH — recent transfers, cursor paginated</option>
+      </optgroup>
+      <optgroup label="GET /wallet-position">
+        <option value="wallet_position">📊 Multi-token wallet with DeFi hold</option>
+        <option value="wallet_position_dust">🌫️ Position with dust filter</option>
+      </optgroup>
+      <optgroup label="GET /wallet-limit">
+        <option value="wallet_limits">📐 Three stacked limits — OPERATIONAL / RISK / REGULATORY</option>
+      </optgroup>
+      <optgroup label="POST /wallet-limit">
+        <option value="amend_operational">✅ Amend OPERATIONAL — self-service raise</option>
+        <option value="amend_risk">⏸️ Amend RISK — pending approval</option>
+        <option value="amend_regulatory">🚫 Amend REGULATORY — refused (422)</option>
+      </optgroup>
+    </select>
+    <div class="si" id="si">Select a scenario above, or fill in the fields manually across the tabs.</div>
+
+    <div class="fsec">Transfer Reference &amp; Holder</div>
+    <div class="fg">
+      <div class="fl">Transfer Reference <span class="ft">idempotency key</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-ref" placeholder="GI-LIQ-2026-05-22-001"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Account Holder Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-hname" placeholder="Global Industries Plc"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Account Holder LEI <span class="ft">ISO 17442</span></div>
+      <input type="text" id="f-hlei" placeholder="213800ABC123DEF45678"/>
+    </div>
+
+    <div class="fsec">Amount</div>
+    <div class="fg">
+      <div class="fl">Value <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-val" placeholder="500000.000000"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Currency <span class="ft">ISO 4217 / XXX</span></div>
+      <select id="f-ccy">
+        <option>USD</option><option>EUR</option><option>GBP</option>
+        <option>CHF</option><option>SGD</option><option>XXX</option>
+      </select>
+    </div>
+
+    <div class="fsec">Operational</div>
+    <div class="fg">
+      <div class="fl">Purpose <span class="ft">free text</span></div>
+      <input type="text" id="f-purpose" placeholder="Operational rebalancing per treasury policy 2026-Q2"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Execution Timing</div>
+      <select id="f-timing">
+        <option value="IMMEDIATE">IMMEDIATE</option>
+        <option value="NEXT_BLOCK_WINDOW">NEXT_BLOCK_WINDOW</option>
+        <option value="BATCHED">BATCHED</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Expiry Date-Time <span class="ft">optional cap</span></div>
+      <input type="text" id="f-expiry" placeholder="2026-05-22T15:00:00Z"/>
+    </div>
+
+    <div class="fsec">Search Filters (for GET /search)</div>
+    <div class="fg"><div class="fl">Status</div>
+      <select id="f-searchstatus">
+        <option value="">all</option>
+        <option value="PENDING">PENDING</option>
+        <option value="BROADCAST">BROADCAST</option>
+        <option value="FINAL">FINAL</option>
+        <option value="BRIDGE_STUCK">BRIDGE_STUCK</option>
+        <option value="FAILED">FAILED</option>
+      </select></div>
+    <div class="fg"><div class="fl">From Date</div>
+      <input type="text" id="f-searchfrom" placeholder="2026-05-01T00:00:00Z"/></div>
+    <div class="fg"><div class="fl">Token DTI</div>
+      <input type="text" id="f-searchdti" placeholder="T9B3X8H2K"/></div>
+
+    <button class="sbtn sp" id="sendbtn" onclick="sendRequest()">Send Request →</button>
+  </div>
+
+  <!-- WALLETS TAB -->
+  <div class="sb-pane" id="tab-wallets">
+    <div class="callout">
+      Both source and destination wallets belong to the same legal account holder.
+      Wallet identification follows the family <code>CashAccount40/proxy/EWAL</code> convention,
+      matching the Instruction and Account Reporting APIs.
+    </div>
+
+    <div class="fsec">Source Wallet</div>
+    <div class="fg">
+      <div class="fl">Wallet Address <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-srcaddr" placeholder="0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Chain DLI</div>
+      <input type="text" id="f-srcchain" placeholder="X9J9XDMTD"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Label <span class="ft">internal name</span></div>
+      <input type="text" id="f-srclabel" placeholder="Treasury hot wallet"/>
+    </div>
+
+    <div class="fsec">Destination Wallet</div>
+    <div class="fg">
+      <div class="fl">Wallet Address <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-dstaddr" placeholder="0xAA77B8C9D0E1F2A3B4C5D6E78890F1A2B3C4D5E6"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Chain DLI</div>
+      <input type="text" id="f-dstchain" placeholder="X9J9XDMTD"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Label</div>
+      <input type="text" id="f-dstlabel" placeholder="Operational settlement wallet"/>
+    </div>
+
+    <div class="fsec">Wallet Query (GET position/limit)</div>
+    <div class="fg">
+      <div class="fl">Wallets <span class="ft">comma-separated</span></div>
+      <textarea id="f-walletsq" rows="2" placeholder="0x88f2B5A8...,0xAA77B8C9..."></textarea>
+    </div>
+    <div class="fg">
+      <div class="fl">Filter Token DTI</div>
+      <input type="text" id="f-postoken" placeholder="leave blank for all"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Min Balance (USD-equivalent)</div>
+      <input type="text" id="f-pomin" placeholder="100"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Include Zero Balances</div>
+      <select id="f-pozero">
+        <option value="false">false (default — only non-zero)</option>
+        <option value="true">true</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- CHAIN TAB -->
+  <div class="sb-pane" id="tab-chain">
+    <div class="callout">
+      Token identification by DTI (ISO 24165-1). For cross-chain transfers, the VASP
+      selects the bridge protocol; the instructing party provides only optional
+      <code>bridge_preference</code> and a <code>maximum_slippage_rate</code> cap.
+    </div>
+
+    <div class="fsec">Token</div>
+    <div class="fg">
+      <div class="fl">Token DTI <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-tokdti" placeholder="T9B3X8H2K"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Token Issuance Chain DLI</div>
+      <input type="text" id="f-tokchain" placeholder="X9J9XDMTD"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Symbol</div>
+      <input type="text" id="f-toksym" placeholder="USDC"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Standard</div>
+      <input type="text" id="f-tokstd" placeholder="ERC-20"/>
+    </div>
+
+    <div class="fsec">Cross-Chain Bridge Options</div>
+    <div class="fg">
+      <div class="fl">Bridge Preference <span class="ft">optional</span></div>
+      <select id="f-bridgepref">
+        <option value="">— none (same-chain or VASP default) —</option>
+        <option value="OPTIMISE_COST">OPTIMISE_COST</option>
+        <option value="OPTIMISE_TIME">OPTIMISE_TIME</option>
+        <option value="OPTIMISE_FINALITY">OPTIMISE_FINALITY</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Maximum Slippage Rate <span class="ft">e.g. 0.003 = 0.3%</span></div>
+      <input type="text" id="f-slip" placeholder="0.003"/>
+    </div>
+
+    <div class="fsec">Transfer ID (for GET / Search)</div>
+    <div class="fg">
+      <div class="fl">Transfer ID</div>
+      <input type="text" id="f-transferid" placeholder="UUID"/>
+    </div>
+  </div>
+
+  <!-- LIMIT TAB -->
+  <div class="sb-pane" id="tab-limit">
+    <div class="callout">
+      Multiple limits may stack on a single wallet with different periods (per-transaction,
+      daily, weekly, monthly) and bases. The basis determines the amendment workflow:
+      OPERATIONAL is typically self-service, RISK requires approval, REGULATORY cannot
+      be amended through the API.
+    </div>
+
+    <div class="fsec">Limit Amendment Target</div>
+    <div class="fg">
+      <div class="fl">Limit ID</div>
+      <input type="text" id="f-limid" placeholder="lim-op-001"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Limit Basis <span class="ft">read-only here, set by the limit definition</span></div>
+      <select id="f-limbasis">
+        <option value="OPERATIONAL">OPERATIONAL — self-service amendable</option>
+        <option value="RISK">RISK — requires risk committee approval</option>
+        <option value="REGULATORY">REGULATORY — NOT amendable through API</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">New Amount <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-limamt" placeholder="2000000.00"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Effective From</div>
+      <input type="text" id="f-limeff" placeholder="2026-05-22T10:00:00Z"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Justification</div>
+      <textarea id="f-limjust" rows="3" placeholder="Rebalancing programme 2026-Q2 requires elevated daily headroom for week of May 22-26."></textarea>
+    </div>
+
+    <div class="fsec">Limit Query Target</div>
+    <div class="fg">
+      <div class="fl">Wallet Address</div>
+      <input type="text" id="f-limwallet" placeholder="0x88f2B5A8..."/>
+    </div>
+    <div class="fg">
+      <div class="fl">Chain DLI</div>
+      <input type="text" id="f-limchain" placeholder="X9J9XDMTD"/>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ═══ REQUEST PANEL ═══ -->
+<div class="panel">
+  <div class="ph">
+    <span class="pt">Request Body</span>
+    <span class="pm" id="req-meta">—</span>
+  </div>
+  <div class="jv" id="req-json">
+    <div class="empty">
+      <div class="ei">📋</div>
+      <div class="et">Select a scenario or fill in the fields</div>
+      <div class="es">The request body will appear here. Choose an operation from the method tabs and load a scenario.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESPONSE PANEL ═══ -->
+<div class="rp">
+  <div class="rh" id="rh">
+    <span class="rt">Response will appear after sending</span>
+  </div>
+  <div class="rb" id="rbody">
+    <div class="empty">
+      <div class="ei">💧</div>
+      <div class="et">Ready to move liquidity</div>
+      <div class="es">Select a scenario and click the send button to see the simulated response.</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end .app -->
+
+<script>
+'use strict';
+
+let method = 'POST_TRANSFER';
+const g = id => document.getElementById(id)?.value || '';
+const s = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+
+const simState = {
+  transferId: 'a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8'
+};
+
+function switchTab(tab) {
+  const tabs = ['config','wallets','chain','limit'];
+  document.querySelectorAll('.sb-tab').forEach((b,i) => {
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.sb-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+}
+
+function setMethod(m) {
+  method = m;
+  const map = {
+    POST_TRANSFER: { btn:'tab-post',   cls:'ap',  pill:'pp',  word:'POST', path:'/v1/wallet-transfer',                desc:'Submit wallet-to-wallet transfer' },
+    GET_TRANSFER:  { btn:'tab-get',    cls:'ag',  pill:'gp',  word:'GET',  path:'/v1/wallet-transfer/{transferId}',   desc:'Retrieve transfer status' },
+    SEARCH:        { btn:'tab-search', cls:'ag',  pill:'gp',  word:'GET',  path:'/v1/wallet-transfer/search',         desc:'Search historic transfers (cursor)' },
+    GET_POSITION:  { btn:'tab-pos',    cls:'ag',  pill:'gp',  word:'GET',  path:'/v1/wallet-position',                desc:'Query wallet position with holds' },
+    GET_LIMIT:     { btn:'tab-lim',    cls:'ag',  pill:'gp',  word:'GET',  path:'/v1/wallet-limit',                   desc:'Query stacked limits' },
+    POST_LIMIT:    { btn:'tab-amend',  cls:'arp', pill:'pup', word:'POST', path:'/v1/wallet-limit',                   desc:'Amend wallet limit' }
+  };
+  Object.entries(map).forEach(([k, cfg]) => {
+    const btn = document.getElementById(cfg.btn);
+    if (!btn) return;
+    btn.className = 'mtab' + (m === k ? ' ' + cfg.cls : '');
+  });
+  const cfg = map[m];
+  const mp = document.getElementById('mp');
+  const ep = document.getElementById('ep-path');
+  if (mp) { mp.textContent = cfg.word; mp.className = 'mpill ' + cfg.pill; }
+  if (ep) ep.textContent = cfg.path;
+  document.getElementById('si').innerHTML = `<strong>${cfg.word}</strong> ${cfg.desc}`;
+  updatePreview();
+}
+
+const SCENARIOS = {
+
+  same_chain: {
+    method:'POST_TRANSFER',
+    info:'<strong>Same-chain USDC liquidity move</strong><br/>Global Industries Plc moves 500,000 USDC from its Ethereum treasury hot wallet to its operational settlement wallet on the same chain. Same legal entity on both sides — no Travel Rule. Settles in one block.',
+    f:{ ref:'GI-LIQ-2026-05-22-001', hname:'Global Industries Plc', hlei:'213800ABC123DEF45678',
+        val:'500000.000000', ccy:'USD', purpose:'Operational rebalancing per treasury policy 2026-Q2',
+        timing:'IMMEDIATE', expiry:'',
+        srcaddr:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7', srcchain:'X9J9XDMTD', srclabel:'Treasury hot wallet',
+        dstaddr:'0xAA77B8C9D0E1F2A3B4C5D6E78890F1A2B3C4D5E6', dstchain:'X9J9XDMTD', dstlabel:'Operational settlement wallet',
+        tokdti:'T9B3X8H2K', tokchain:'X9J9XDMTD', toksym:'USDC', tokstd:'ERC-20',
+        bridgepref:'', slip:'' }
+  },
+
+  cross_chain_cost: {
+    method:'POST_TRANSFER',
+    info:'<strong>Cross-chain — optimise cost</strong><br/>Ethereum → Polygon USDC move. The corporate expresses <code>OPTIMISE_COST</code> preference, caps slippage at 0.3%. The VASP picks the lowest-cost route (Circle CCTP for canonical issuance). <code>destination_token</code> in the response confirms the Polygon-side USDC representation.',
+    f:{ ref:'GI-LIQ-2026-05-22-002', hname:'Global Industries Plc', hlei:'213800ABC123DEF45678',
+        val:'250000.000000', ccy:'USD', purpose:'Polygon programme funding',
+        timing:'IMMEDIATE', expiry:'',
+        srcaddr:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7', srcchain:'X9J9XDMTD', srclabel:'Ethereum treasury',
+        dstaddr:'0xBB99C8D7E6F5A4B3C2D1E0F9A8B7C6D5E4F3A2B1', dstchain:'T9B3X8H2K', dstlabel:'Polygon operational',
+        tokdti:'T9B3X8H2K', tokchain:'X9J9XDMTD', toksym:'USDC', tokstd:'ERC-20',
+        bridgepref:'OPTIMISE_COST', slip:'0.003' }
+  },
+
+  cross_chain_time: {
+    method:'POST_TRANSFER',
+    info:'<strong>Cross-chain — optimise time</strong><br/>Same business operation, urgent. <code>OPTIMISE_TIME</code> tells the VASP to pick a fast bridge even at higher cost (LayerZero Stargate). Slippage allowance increased to 0.5%. Expiry 5 minutes from submission — transfer must complete within window.',
+    f:{ ref:'GI-LIQ-2026-05-22-003', hname:'Global Industries Plc', hlei:'213800ABC123DEF45678',
+        val:'120000.000000', ccy:'USD', purpose:'Urgent Polygon-side deadline',
+        timing:'IMMEDIATE', expiry:'2026-05-22T09:23:00Z',
+        srcaddr:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7', srcchain:'X9J9XDMTD', srclabel:'Ethereum treasury',
+        dstaddr:'0xBB99C8D7E6F5A4B3C2D1E0F9A8B7C6D5E4F3A2B1', dstchain:'T9B3X8H2K', dstlabel:'Polygon operational',
+        tokdti:'T9B3X8H2K', tokchain:'X9J9XDMTD', toksym:'USDC', tokstd:'ERC-20',
+        bridgepref:'OPTIMISE_TIME', slip:'0.005' }
+  },
+
+  cross_chain_finality: {
+    method:'POST_TRANSFER',
+    info:'<strong>Cross-chain — optimise finality</strong><br/>The corporate prioritises strong-finality destination — picks <code>OPTIMISE_FINALITY</code>. The VASP routes via canonical bridges with longer settlement windows but stronger destination-chain assurances. Tight slippage cap 0.1%.',
+    f:{ ref:'GI-LIQ-2026-05-22-004', hname:'Global Industries Plc', hlei:'213800ABC123DEF45678',
+        val:'1000000.000000', ccy:'USD', purpose:'Long-term position rebalancing',
+        timing:'IMMEDIATE', expiry:'',
+        srcaddr:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7', srcchain:'X9J9XDMTD', srclabel:'Ethereum treasury',
+        dstaddr:'0xBB99C8D7E6F5A4B3C2D1E0F9A8B7C6D5E4F3A2B1', dstchain:'T9B3X8H2K', dstlabel:'Polygon operational',
+        tokdti:'T9B3X8H2K', tokchain:'X9J9XDMTD', toksym:'USDC', tokstd:'ERC-20',
+        bridgepref:'OPTIMISE_FINALITY', slip:'0.001' }
+  },
+
+  self_custody_transfer: {
+    method:'POST_TRANSFER',
+    info:'<strong>Self-custody transfer record</strong><br/>TechFlow Singapore runs its own Ethereum node and signed/broadcast the transaction itself. It records the transfer with its partner VASP for reconciliation only — the VASP did not sign or broadcast. Cross-references the on-chain hash directly.',
+    f:{ ref:'TF-LIQ-2026-05-22-001', hname:'TechFlow Singapore Pte Ltd', hlei:'9598005H8H0HE9JJZB55',
+        val:'250000.000000', ccy:'USD', purpose:'Self-custody position rebalance — recording only',
+        timing:'IMMEDIATE', expiry:'',
+        srcaddr:'0x14e29B6e4f0C2C4f0bD2A5eA43b8e0A9e5d4c8C12', srcchain:'X9J9XDMTD', srclabel:'TF treasury (self-hosted)',
+        dstaddr:'0xCC3D9E2F1A8B5C7D9E0F2A4B6C8D0E2F4A6B8C0D', dstchain:'X9J9XDMTD', dstlabel:'TF operational',
+        tokdti:'T9B3X8H2K', tokchain:'X9J9XDMTD', toksym:'USDC', tokstd:'ERC-20',
+        bridgepref:'', slip:'' }
+  },
+
+  get_final: {
+    method:'GET_TRANSFER',
+    info:'<strong>FINAL — same-chain settled</strong><br/>Same-chain transfer reached FINAL after one block. Confirmation depth 1 (Ethereum default checkpoint finality). The transfer detail carries the on-chain transaction hash and timing.',
+    f:{ transferid:'a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8' }
+  },
+
+  get_broadcasting: {
+    method:'GET_TRANSFER',
+    info:'<strong>BROADCAST — awaiting finality</strong><br/>Cross-chain transfer was broadcast to source chain 90 seconds ago. Source-side included at block 19234500, awaiting bridge attestation. Status PROBABILISTIC pending destination-chain credit.',
+    f:{ transferid:'b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9' }
+  },
+
+  bridge_stuck: {
+    method:'GET_TRANSFER',
+    info:'<strong>BRIDGE_STUCK — mid-flight failure</strong><br/>Two hours after submission, source-chain settled but destination-chain credit not observed. Status <code>BRIDGE_STUCK</code> with detail explaining recovery path. Circle CCTP attestation pending operator rebroadcast.',
+    f:{ transferid:'b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9' }
+  },
+
+  search_open: {
+    method:'SEARCH',
+    info:'<strong>Search — recent transfers</strong><br/>Operations dashboard query for transfers since the start of the month. Cursor-based pagination — returns up to 50 results plus next_cursor. Cursor valid 24h.',
+    f:{ searchstatus:'', searchfrom:'2026-05-01T00:00:00Z', searchdti:'T9B3X8H2K' }
+  },
+
+  wallet_position: {
+    method:'GET_POSITION',
+    info:'<strong>Multi-token wallet with DeFi hold</strong><br/>Position query across two corporate wallets. Treasury hot wallet has 75,000 USDC locked in Aave v3, surfaced via <code>holds_detail</code>. Available balance is current minus pending_outbound minus holds.',
+    f:{ walletsq:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7,0xAA77B8C9D0E1F2A3B4C5D6E78890F1A2B3C4D5E6', postoken:'', pomin:'', pozero:'false' }
+  },
+
+  wallet_position_dust: {
+    method:'GET_POSITION',
+    info:'<strong>Position with dust filter</strong><br/>Same wallets, but with <code>min_balance_value_usd=100</code> applied. Dust tokens below $100 USD-equivalent are excluded from the response.',
+    f:{ walletsq:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7', postoken:'', pomin:'100', pozero:'false' }
+  },
+
+  wallet_limits: {
+    method:'GET_LIMIT',
+    info:'<strong>Three stacked limits</strong><br/>Treasury hot wallet has three simultaneous limits: OPERATIONAL daily $1M, RISK weekly $5M, REGULATORY monthly $20M. All evaluated on every transfer — most restrictive available headroom wins.',
+    f:{ limwallet:'0x88f2B5A8b9C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7', limchain:'X9J9XDMTD' }
+  },
+
+  amend_operational: {
+    method:'POST_LIMIT',
+    info:'<strong>Amend OPERATIONAL limit — self-service</strong><br/>Raise daily operational cap from $1M to $2M to support an unusually large rebalancing programme. For OPERATIONAL-basis limits, the amendment is self-service and takes effect immediately.',
+    f:{ limid:'lim-op-001', limbasis:'OPERATIONAL', limamt:'2000000.00', limeff:'2026-05-22T10:00:00Z',
+        limjust:'Rebalancing programme 2026-Q2 requires elevated daily headroom for week of May 22-26.' }
+  },
+
+  amend_risk: {
+    method:'POST_LIMIT',
+    info:'<strong>Amend RISK limit — pending approval</strong><br/>The corporate requests a RISK-basis weekly cap increase. The amendment requires the VASP\'s risk committee approval. The API records the request and returns <code>PENDING_APPROVAL</code> — applies once approved out-of-band.',
+    f:{ limid:'lim-risk-002', limbasis:'RISK', limamt:'8000000.00', limeff:'2026-05-26T00:00:00Z',
+        limjust:'Anticipated higher activity through end-Q2 — supports the rebalancing programme and follow-on Polygon-side operations.' }
+  },
+
+  amend_regulatory: {
+    method:'POST_LIMIT',
+    info:'<strong>Attempt to amend REGULATORY — refused (422)</strong><br/>The corporate attempts to amend the regulatory monthly cap. API refuses with HTTP 422 and <code>REGULATORY_LIMIT_NOT_AMENDABLE</code>. Changes to regulatory limits go through the regulator\'s notification process, not the API.',
+    f:{ limid:'lim-reg-003', limbasis:'REGULATORY', limamt:'30000000.00', limeff:'2026-06-01T00:00:00Z',
+        limjust:'Want to raise the regulatory monthly cap.' }
+  }
+};
+
+function loadScenario(key) {
+  if (!key) return;
+  const sc = SCENARIOS[key];
+  if (!sc) return;
+  setMethod(sc.method);
+  if (sc.f) Object.entries(sc.f).forEach(([k,v]) => s('f-' + k, v));
+  document.getElementById('si').innerHTML = sc.info;
+  updatePreview();
+}
+
+function buildReq() {
+  if (method === 'GET_TRANSFER') {
+    return { _type:'GET_TRANSFER', transferId: g('f-transferid') || simState.transferId };
+  }
+  if (method === 'SEARCH') {
+    return { _type:'SEARCH',
+      status: g('f-searchstatus') || undefined,
+      from: g('f-searchfrom') || undefined,
+      token_dti: g('f-searchdti') || undefined,
+      page_size: 50 };
+  }
+  if (method === 'GET_POSITION') {
+    return { _type:'GET_POSITION',
+      wallets: (g('f-walletsq') || '').split(',').map(w => w.trim()).filter(Boolean),
+      token_dti: g('f-postoken') || undefined,
+      min_balance_value_usd: g('f-pomin') || undefined,
+      include_zero_balances: g('f-pozero') === 'true' ? true : undefined };
+  }
+  if (method === 'GET_LIMIT') {
+    return { _type:'GET_LIMIT',
+      wallet: g('f-limwallet'),
+      chain_dli: g('f-limchain') || undefined };
+  }
+  if (method === 'POST_LIMIT') {
+    return {
+      _type:'POST_LIMIT',
+      _path:'/v1/wallet-limit',
+      limit_id: g('f-limid'),
+      new_amount: g('f-limamt'),
+      effective_from: g('f-limeff') || undefined,
+      requestor: {
+        name: g('f-hname') || 'Global Industries Plc',
+        lei: g('f-hlei') || undefined
+      },
+      justification: g('f-limjust') || undefined
+    };
+  }
+  // POST_TRANSFER
+  return {
+    _type:'POST_TRANSFER',
+    _path:'/v1/wallet-transfer',
+    transfer_reference: g('f-ref'),
+    account_holder: {
+      name: g('f-hname'),
+      lei: g('f-hlei') || undefined
+    },
+    source_wallet: {
+      proxy: { type: { code:'EWAL' }, identification: g('f-srcaddr') },
+      chain_dli: g('f-srcchain') || undefined,
+      label: g('f-srclabel') || undefined
+    },
+    destination_wallet: {
+      proxy: { type: { code:'EWAL' }, identification: g('f-dstaddr') },
+      chain_dli: g('f-dstchain') || undefined,
+      label: g('f-dstlabel') || undefined
+    },
+    amount: { value: g('f-val'), currency: g('f-ccy') },
+    token: {
+      token_dti: g('f-tokdti'),
+      chain_dli: g('f-tokchain') || undefined,
+      token_symbol: g('f-toksym') || undefined,
+      token_standard: g('f-tokstd') || undefined
+    },
+    purpose: g('f-purpose') || undefined,
+    execution_timing: g('f-timing') || 'IMMEDIATE',
+    bridge_preference: g('f-bridgepref') || undefined,
+    maximum_slippage_rate: g('f-slip') || undefined,
+    expiry_date_time: g('f-expiry') || undefined
+  };
+}
+
+function renderJSON(obj) {
+  const clean = JSON.parse(JSON.stringify(obj, (k,v) => k.startsWith('_') ? undefined : v));
+  const s = JSON.stringify(clean, null, 2);
+  return s.replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+    let cls = 'j-num';
+    if (/^"/.test(m)) cls = /:$/.test(m) ? 'j-key' : 'j-str';
+    else if (/true|false/.test(m)) cls = 'j-bool';
+    else if (/null/.test(m)) cls = 'j-null';
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+function updatePreview() {
+  const req = buildReq();
+  const isReadLike = method.startsWith('GET') || method === 'SEARCH';
+  if (isReadLike) {
+    const path = req._path || (method === 'GET_TRANSFER' ? '/v1/wallet-transfer/' + (req.transferId || '{id}') :
+                                method === 'SEARCH' ? '/v1/wallet-transfer/search' :
+                                method === 'GET_POSITION' ? '/v1/wallet-position' :
+                                method === 'GET_LIMIT' ? '/v1/wallet-limit' : '/v1/');
+    document.getElementById('req-meta').textContent = 'GET ' + path;
+    const q = Object.entries(req).filter(([k,v]) => !k.startsWith('_') && k !== 'transferId' && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))
+      .map(([k,v]) => Array.isArray(v) ? `${k}=${v.join(',')}` : `${k}=${v}`).join('&');
+    document.getElementById('req-json').innerHTML = `<pre>GET ${path}${q ? '?' + q : ''}\n\n<span class="j-null">(no body for GET)</span></pre>`;
+  } else {
+    const path = req._path || '/v1/wallet-transfer';
+    document.getElementById('req-meta').textContent = 'POST ' + path;
+    document.getElementById('req-json').innerHTML = `<pre>${renderJSON(req)}</pre>`;
+  }
+}
+
+function sendRequest() {
+  updatePreview();
+  const req = buildReq();
+  document.getElementById('rh').innerHTML = `<div class="ldots"><span></span><span></span><span></span></div>`;
+  document.getElementById('rbody').innerHTML = `<div class="empty"><div class="ldots"><span></span><span></span><span></span></div><div class="et">Processing…</div></div>`;
+  setTimeout(() => renderResponse(req), 600 + Math.random() * 400);
+}
+
+function renderResponse(req) {
+  const elapsed = Math.floor(80 + Math.random() * 220);
+  const { _type } = req;
+
+  if (_type === 'POST_TRANSFER') {
+    const newId = 'tx-' + Math.random().toString(16).slice(2,10) + '-' + Math.random().toString(16).slice(2,14);
+    simState.transferId = newId;
+    const isCrossChain = !!req.bridge_preference || (req.source_wallet?.chain_dli !== req.destination_wallet?.chain_dli);
+    const bridgeProto = isCrossChain ?
+      (req.bridge_preference === 'OPTIMISE_TIME' ? 'LayerZero Stargate fast lane' :
+       req.bridge_preference === 'OPTIMISE_FINALITY' ? 'Wormhole NTT canonical' :
+       'Circle CCTP') : '';
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s201">201 Created</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/wallet-transfer</span>
+       <span class="rt">${elapsed}ms</span>`;
+    let cards = `
+    <div class="card">
+      <div class="ch"><span>💧</span><span class="ct">Transfer Accepted</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">transfer_id</div><div class="dv hi">${newId}</div></div>
+        <div class="dr"><div class="dk">transfer_reference</div><div class="dv">${req.transfer_reference}</div></div>
+        <div class="dr"><div class="dk">status</div><div class="dv"><span class="status-pill st-pending">PENDING</span></div></div>
+        <div class="dr"><div class="dk">accepted_at</div><div class="dv">${new Date().toISOString()}</div></div>
+        <div class="dr"><div class="dk">estimated_completion</div><div class="dv ok">${estCompletion(isCrossChain, req.bridge_preference)}</div></div>
+      </div>
+    </div>
+    <div class="pgrid">
+      <div class="pbox">
+        <div class="prole">Source Wallet</div>
+        <div class="pname">${req.source_wallet?.label || '—'}</div>
+        <div class="paddr">${req.source_wallet?.proxy?.identification || ''}</div>
+        <div class="pdet">chain DLI ${req.source_wallet?.chain_dli || '—'}</div>
+      </div>
+      <div class="pbox">
+        <div class="prole">Destination Wallet</div>
+        <div class="pname">${req.destination_wallet?.label || '—'}</div>
+        <div class="paddr">${req.destination_wallet?.proxy?.identification || ''}</div>
+        <div class="pdet">chain DLI ${req.destination_wallet?.chain_dli || '—'}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">Amount &amp; Token</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">value</div><div class="dv ok">${req.amount?.value} <span class="dti-tag">${req.amount?.currency}</span></div></div>
+        <div class="dr"><div class="dk">token</div><div class="dv">${req.token?.token_symbol || ''} <span class="dti-tag">DTI ${req.token?.token_dti || ''}</span></div></div>
+        <div class="dr"><div class="dk">standard</div><div class="dv">${req.token?.token_standard || '—'}</div></div>
+      </div>
+    </div>`;
+    if (isCrossChain) {
+      cards += `
+      <div class="card callout-amber" style="border-radius:7px">
+        <div class="ch"><span>🌉</span><span class="ct">Cross-chain — Bridge selected by VASP</span></div>
+        <div class="cb">
+          <div class="dr"><div class="dk">bridge_protocol</div><div class="dv hi">${bridgeProto}</div></div>
+          ${req.bridge_preference ? `<div class="dr"><div class="dk">preference</div><div class="dv">${req.bridge_preference}</div></div>` : ''}
+          ${req.maximum_slippage_rate ? `<div class="dr"><div class="dk">max slippage</div><div class="dv">${req.maximum_slippage_rate} (${(parseFloat(req.maximum_slippage_rate)*100).toFixed(2)}%)</div></div>` : ''}
+          <div class="dr"><div class="dk">destination_token</div><div class="dv">${req.token?.token_symbol} (<strong>CANONICAL</strong> on destination chain)</div></div>
+          <div class="dr"><div class="dk">est. bridge cost</div><div class="dv wa">${bridgeProto === 'LayerZero Stargate fast lane' ? '0.0089 ETH' : (bridgeProto === 'Wormhole NTT canonical' ? '0.0034 ETH' : '0.0023 ETH')}</div></div>
+        </div>
+      </div>`;
+    }
+    cards += `
+    <div class="card callout-green" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">Travel Rule:</strong>
+        Not applicable — same legal account holder on both sides.
+        Switch to <strong style="color:var(--blue)">GET Transfer</strong> to retrieve status as it progresses through BROADCAST → FINAL.
+      </div>
+    </div>`;
+    document.getElementById('rbody').innerHTML = `<div class="ani" style="display:flex;flex-direction:column;gap:10px">${cards}</div>`;
+    return;
+  }
+
+  if (_type === 'GET_TRANSFER') {
+    // Pick a status based on scenario
+    const stuck = req.transferId === 'b2c3d4e5-f6a7-4890-b123-c4d5e6f7a8b9' && Math.random() > 0.5;
+    const isFinal = !stuck && req.transferId === 'a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8';
+    const isBroadcast = !stuck && !isFinal;
+    const status = stuck ? 'BRIDGE_STUCK' : isFinal ? 'FINAL' : 'BROADCAST';
+    const statusCls = stuck ? 'st-failed' : isFinal ? 'st-final' : 'st-confirming';
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/wallet-transfer/${req.transferId.slice(0,16)}…</span>
+       <span class="rt">${elapsed}ms</span>`;
+    let cards = `
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Transfer Detail</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">transfer_id</div><div class="dv hi">${req.transferId}</div></div>
+        <div class="dr"><div class="dk">status</div><div class="dv"><span class="status-pill ${statusCls}">${status}</span></div></div>
+        <div class="dr"><div class="dk">finality_status</div><div class="dv ${isFinal ? 'ok' : 'wa'}">${isFinal ? 'FINAL' : 'PROBABILISTIC'}</div></div>
+        <div class="dr"><div class="dk">confirmation_depth</div><div class="dv">${isFinal ? 12 : (stuck ? 12 : 3)}</div></div>
+      </div>
+    </div>`;
+    if (stuck) {
+      cards += `
+      <div class="card callout-amber" style="border-radius:7px">
+        <div class="ch"><span>⚠️</span><span class="ct">Status Detail</span></div>
+        <div class="cb" style="font-size:11px;line-height:1.6;color:var(--muted)">
+          Source-chain settled at block 19234567. Destination-chain credit not observed after 2h.
+          Circle CCTP attestation pending operator rebroadcast; ETA 1-4h.
+          The transfer is <strong style="color:var(--amber)">not lost</strong> — recovery path is the bridge protocol's
+          attestation rebroadcast mechanism.
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span>⛓</span><span class="ct">Bridge Status</span></div>
+        <div class="cb">
+          <div class="dr"><div class="dk">source_chain_tx_hash</div><div class="dv addr">0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321</div></div>
+          <div class="dr"><div class="dk">destination_chain_tx_hash</div><div class="dv er">null (not observed)</div></div>
+          <div class="dr"><div class="dk">bridge_protocol</div><div class="dv">Circle CCTP</div></div>
+          <div class="dr"><div class="dk">elapsed</div><div class="dv wa">2h 0m 42s</div></div>
+        </div>
+      </div>`;
+    } else {
+      cards += `
+      <div class="card">
+        <div class="ch"><span>⛓</span><span class="ct">On-Chain Settlement Evidence</span></div>
+        <div class="cb">
+          <div class="dr"><div class="dk">source_chain_tx_hash</div><div class="dv addr">0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321</div></div>
+          ${isFinal ? '' : '<div class="dr"><div class="dk">destination_chain_tx_hash</div><div class="dv wa">pending</div></div>'}
+          ${isFinal ? '<div class="dr"><div class="dk">block_timestamp</div><div class="dv ok">2026-05-22T09:15:23Z</div></div>' : ''}
+          <div class="dr"><div class="dk">elapsed</div><div class="dv">${isFinal ? '63s' : '1m 32s'}</div></div>
+        </div>
+      </div>`;
+    }
+    document.getElementById('rbody').innerHTML = `<div class="ani" style="display:flex;flex-direction:column;gap:10px">${cards}</div>`;
+    return;
+  }
+
+  if (_type === 'SEARCH') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/wallet-transfer/search</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="apill">
+      <span class="at">3 results</span>
+      <span class="af">page_size 50 · total_count_estimate 27</span>
+    </div>
+    <div class="sr-list">
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">tx-a1b2c3d4-e5f6-4789-a012</span>
+          <span class="status-pill st-final">FINAL</span>
+        </div>
+        <div class="sr-parties">Ethereum treasury <span style="color:var(--dim)">→</span> Operational</div>
+        <div class="sr-meta">
+          <span class="sr-amt">500,000.00 USD</span>
+          <span class="dti-tag">USDC</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-05-22 09:14</span>
+        </div>
+      </div>
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">tx-b2c3d4e5-f6a7-4890-b123</span>
+          <span class="status-pill st-failed">BRIDGE_STUCK</span>
+        </div>
+        <div class="sr-parties">Ethereum treasury <span style="color:var(--dim)">→</span> Polygon operational</div>
+        <div class="sr-meta">
+          <span class="sr-amt">250,000.00 USD</span>
+          <span class="dti-tag">USDC</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-05-22 09:18</span>
+        </div>
+      </div>
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">tx-c3d4e5f6-a7b8-4901-c234</span>
+          <span class="status-pill st-final">FINAL</span>
+        </div>
+        <div class="sr-parties">Ethereum treasury <span style="color:var(--dim)">→</span> Polygon operational</div>
+        <div class="sr-meta">
+          <span class="sr-amt">120,000.00 USD</span>
+          <span class="dti-tag">USDC</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-05-21 14:52</span>
+        </div>
+      </div>
+    </div>
+    <div class="card callout-green" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">next_cursor:</strong>
+        <code style="font-family:var(--mono);font-size:10px;color:var(--cyan);background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px">eyJsYXN0X2lkIjoidHgtYzNkNGU1ZjYiLCJzb3J0IjoiY3JlYXRlZF9hdCJ9</code>
+        — pass as <code style="font-family:var(--mono);font-size:10px;color:var(--cyan)">?cursor=</code> on next call.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  if (_type === 'GET_POSITION') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/wallet-position</span>
+       <span class="rt">${elapsed}ms</span>`;
+    const hasMin = !!req.min_balance_value_usd;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    ${hasMin ? `<div class="apill"><span class="at">Dust filter applied</span><span class="af">min_balance_value_usd = ${req.min_balance_value_usd}</span></div>` : ''}
+    <div class="card">
+      <div class="ch"><span>📊</span><span class="ct">Position — Treasury hot wallet</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">wallet</div><div class="dv addr">0x88f2B5A8…D6E7 (Ethereum)</div></div>
+        <div class="dr"><div class="dk">as_of</div><div class="dv">${new Date().toISOString()}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">USDC Balance</span></div>
+      <div class="cb">
+        <div class="fee-grid">
+          <div class="fee-box"><div class="fee-amt">1,250,000</div><div class="fee-lbl">Current</div></div>
+          <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">925,000</div><div class="fee-lbl">Available</div></div>
+          <div class="fee-box"><div class="fee-amt">0</div><div class="fee-lbl">Pending in</div></div>
+        </div>
+        <div class="dr"><div class="dk">pending_outbound</div><div class="dv wa">250,000.00 (in-flight transfer to operational)</div></div>
+        <div class="dr"><div class="dk">DTI</div><div class="dv">T9B3X8H2K</div></div>
+      </div>
+    </div>
+    <div class="card callout-amber" style="border-radius:7px">
+      <div class="ch"><span>🔒</span><span class="ct">Holds Detail</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">LENT_DEFI</div><div class="dv wa">75,000.00 USDC<br/><span style="font-size:10px;color:var(--muted)">Aave v3 supply position · release on withdrawal</span></div></div>
+      </div>
+    </div>
+    ${hasMin ? '' : `
+    <div class="card">
+      <div class="ch"><span>Ξ</span><span class="ct">ETH Balance</span></div>
+      <div class="cb">
+        <div class="fee-grid">
+          <div class="fee-box"><div class="fee-amt">12.4530</div><div class="fee-lbl">Current</div></div>
+          <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">12.4530</div><div class="fee-lbl">Available</div></div>
+          <div class="fee-box"><div class="fee-amt">0</div><div class="fee-lbl">Pending</div></div>
+        </div>
+        <div class="dr"><div class="dk">DTI</div><div class="dv">X9J9XDMTD</div></div>
+      </div>
+    </div>`}
+    ${(req.wallets || []).length > 1 ? `
+    <div class="card">
+      <div class="ch"><span>📊</span><span class="ct">Position — Operational settlement wallet</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">wallet</div><div class="dv addr">0xAA77B8C9…D5E6 (Ethereum)</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">USDC Balance</span></div>
+      <div class="cb">
+        <div class="fee-grid">
+          <div class="fee-box"><div class="fee-amt">82,000</div><div class="fee-lbl">Current</div></div>
+          <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">82,000</div><div class="fee-lbl">Available</div></div>
+          <div class="fee-box"><div class="fee-amt">500,000</div><div class="fee-lbl">Pending in</div></div>
+        </div>
+      </div>
+    </div>` : ''}
+    </div>`;
+    return;
+  }
+
+  if (_type === 'GET_LIMIT') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/wallet-limit</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card">
+      <div class="ch"><span>🚦</span><span class="ct">Wallet</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">wallet</div><div class="dv addr">${req.wallet || '—'}</div></div>
+        <div class="dr"><div class="dk">chain DLI</div><div class="dv">${req.chain_dli || '—'}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>1</span><span class="ct">OPERATIONAL · Daily · Self-service amendable</span></div>
+      <div class="cb">
+        <div class="fee-grid">
+          <div class="fee-box"><div class="fee-amt">$1,000,000</div><div class="fee-lbl">Amount</div></div>
+          <div class="fee-box"><div class="fee-amt">$250,000</div><div class="fee-lbl">Consumed</div></div>
+          <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">$750,000</div><div class="fee-lbl">Available</div></div>
+        </div>
+        <div class="dr"><div class="dk">next_reset</div><div class="dv">2026-05-23T00:00:00Z</div></div>
+        <div class="dr"><div class="dk">limit_id</div><div class="dv">lim-op-001</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>2</span><span class="ct">RISK · Weekly · Requires risk committee</span></div>
+      <div class="cb">
+        <div class="fee-grid">
+          <div class="fee-box"><div class="fee-amt">$5,000,000</div><div class="fee-lbl">Amount</div></div>
+          <div class="fee-box"><div class="fee-amt">$1,200,000</div><div class="fee-lbl">Consumed</div></div>
+          <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">$3,800,000</div><div class="fee-lbl">Available</div></div>
+        </div>
+        <div class="dr"><div class="dk">next_reset</div><div class="dv">2026-05-26T00:00:00Z</div></div>
+        <div class="dr"><div class="dk">limit_id</div><div class="dv">lim-risk-002</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>3</span><span class="ct">REGULATORY · Monthly · NOT API-amendable</span></div>
+      <div class="cb">
+        <div class="fee-grid">
+          <div class="fee-box"><div class="fee-amt">$20,000,000</div><div class="fee-lbl">Amount</div></div>
+          <div class="fee-box"><div class="fee-amt">$4,750,000</div><div class="fee-lbl">Consumed</div></div>
+          <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">$15,250,000</div><div class="fee-lbl">Available</div></div>
+        </div>
+        <div class="dr"><div class="dk">next_reset</div><div class="dv">2026-06-01T00:00:00Z</div></div>
+        <div class="dr"><div class="dk">limit_id</div><div class="dv">lim-reg-003</div></div>
+      </div>
+    </div>
+    <div class="card callout-amber" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--amber)">Evaluation:</strong>
+        All three limits are evaluated on every transfer. The most restrictive available headroom wins — here the OPERATIONAL daily limit ($750K) is binding.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  if (_type === 'POST_LIMIT') {
+    if (req.requestor && g('f-limbasis') === 'REGULATORY') {
+      document.getElementById('rh').innerHTML =
+        `<span class="sbadge s422">422 Unprocessable Entity</span>
+         <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/wallet-limit</span>
+         <span class="rt">${elapsed}ms</span>`;
+      document.getElementById('rbody').innerHTML = `
+      <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+      <div class="card slip-alert">
+        <div style="font-size:22px;color:var(--red);margin-bottom:8px">⛔</div>
+        <div style="font-size:14px;font-weight:600;color:var(--red);margin-bottom:6px">REGULATORY_LIMIT_NOT_AMENDABLE</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          REGULATORY-basis limits cannot be amended through the API.<br/>
+          Contact your jurisdictional regulator's notification or authorisation desk.
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span>📋</span><span class="ct">Refusal Detail</span></div>
+        <div class="cb">
+          <div class="dr"><div class="dk">limit_id</div><div class="dv">${req.limit_id}</div></div>
+          <div class="dr"><div class="dk">basis</div><div class="dv er">REGULATORY</div></div>
+          <div class="dr"><div class="dk">regulator</div><div class="dv">Financial Conduct Authority (UK)</div></div>
+          <div class="dr"><div class="dk">notification_reference</div><div class="dv hi">FCA-CASP-2026-NTF-00231</div></div>
+        </div>
+      </div>
+      </div>`;
+      return;
+    }
+    const basis = g('f-limbasis');
+    const isRisk = basis === 'RISK';
+    const status = isRisk ? 'PENDING_APPROVAL' : 'APPLIED';
+    const statusCls = isRisk ? 'st-pending' : 'st-final';
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s201">201 Created</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/wallet-limit</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card">
+      <div class="ch"><span>✏️</span><span class="ct">Amendment Request Recorded</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">amendment_id</div><div class="dv hi">amd-2026-${Math.floor(Math.random()*99999).toString().padStart(5,'0')}</div></div>
+        <div class="dr"><div class="dk">limit_id</div><div class="dv">${req.limit_id}</div></div>
+        <div class="dr"><div class="dk">basis</div><div class="dv">${basis}</div></div>
+        <div class="dr"><div class="dk">new_amount</div><div class="dv ok">${parseInt(req.new_amount).toLocaleString()} USD</div></div>
+        <div class="dr"><div class="dk">status</div><div class="dv"><span class="status-pill ${statusCls}">${status}</span></div></div>
+        <div class="dr"><div class="dk">effective_from</div><div class="dv">${req.effective_from || 'now'}</div></div>
+      </div>
+    </div>
+    <div class="card ${isRisk ? 'callout-amber' : 'callout-green'}" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;line-height:1.6;color:var(--muted)">
+        ${isRisk ?
+          '<strong style="color:var(--amber)">Pending risk committee approval.</strong> The amendment is recorded but does not take effect until approved out-of-band. Status will transition to <code style="font-family:var(--mono);color:var(--cyan)">APPLIED</code> once approved.' :
+          '<strong style="color:var(--green)">Effective immediately.</strong> OPERATIONAL-basis amendments are self-service for the account holder and take effect on the specified date.'}
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+}
+
+function estCompletion(isCrossChain, pref) {
+  const now = Date.now();
+  let plus;
+  if (!isCrossChain) plus = 13 * 1000;  // one Ethereum block
+  else if (pref === 'OPTIMISE_TIME') plus = 3 * 60 * 1000;
+  else if (pref === 'OPTIMISE_FINALITY') plus = 30 * 60 * 1000;
+  else plus = 15 * 60 * 1000;
+  return new Date(now + plus).toISOString();
+}
+
+// Live-preview wiring
+['f-ref','f-hname','f-hlei','f-val','f-ccy','f-purpose','f-timing','f-expiry',
+ 'f-srcaddr','f-srcchain','f-srclabel','f-dstaddr','f-dstchain','f-dstlabel',
+ 'f-tokdti','f-tokchain','f-toksym','f-tokstd','f-bridgepref','f-slip',
+ 'f-transferid','f-walletsq','f-postoken','f-pomin','f-pozero',
+ 'f-limid','f-limbasis','f-limamt','f-limeff','f-limjust','f-limwallet','f-limchain',
+ 'f-searchstatus','f-searchfrom','f-searchdti'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updatePreview);
+});
+
+setMethod('POST_TRANSFER');
+loadScenario('same_chain');
+</script>
+
+</body>
+</html>
