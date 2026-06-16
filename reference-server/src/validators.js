@@ -86,6 +86,7 @@ const TRAVEL_RULE_WALLET_TYPES = new Set([
 const CUSTODY_MODELS = new Set([
   'FULL_CUSTODY',
   'DELEGATED_SIGNING',
+  'SELF_CUSTODY',
 ]);
 
 const RAMP_TYPES = new Set([
@@ -468,12 +469,19 @@ function validateParty(errors, value, field) {
   );
 }
 
-function validateAgent(errors, value, field) {
+function validateAgent(errors, value, field, { required = true } = {}) {
+  if (value === undefined || value === null) {
+    if (required) {
+      pushError(errors, field, `${field} is required and must be an object.`);
+    }
+    return;
+  }
+
   validateRequiredField(
     errors,
     isObject(value),
     field,
-    `${field} is required and must be an object.`,
+    `${field} must be an object.`,
   );
   if (!isObject(value)) {
     return;
@@ -820,9 +828,9 @@ export function validateInstructionSubmission(body) {
     'interbank_settlement_amount',
   );
   validateParty(errors, body.debtor, 'debtor');
-  validateAgent(errors, body.debtor_agent, 'debtor_agent');
+  validateAgent(errors, body.debtor_agent, 'debtor_agent', { required: false });
   validateParty(errors, body.creditor, 'creditor');
-  validateAgent(errors, body.creditor_agent, 'creditor_agent');
+  validateAgent(errors, body.creditor_agent, 'creditor_agent', { required: false });
 
   validateRequiredField(
     errors,
@@ -951,14 +959,18 @@ export function validateTravelRuleSubmission(body) {
     data.debtor_account,
     'travel_rule_data.debtor_account',
   );
-  validateAgent(errors, data.debtor_agent, 'travel_rule_data.debtor_agent');
+  validateAgent(errors, data.debtor_agent, 'travel_rule_data.debtor_agent', {
+    required: false,
+  });
   validateParty(errors, data.creditor, 'travel_rule_data.creditor');
   validateWalletAccount(
     errors,
     data.creditor_account,
     'travel_rule_data.creditor_account',
   );
-  validateAgent(errors, data.creditor_agent, 'travel_rule_data.creditor_agent');
+  validateAgent(errors, data.creditor_agent, 'travel_rule_data.creditor_agent', {
+    required: false,
+  });
   validateEnumField(
     errors,
     data.counterparty_wallet_type,

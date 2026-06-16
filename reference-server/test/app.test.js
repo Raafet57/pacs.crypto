@@ -919,6 +919,70 @@ test('delegated signing remains explicitly out of scope', async () => {
   await app.close();
 });
 
+test('v1.3 SELF_CUSTODY is accepted by validation but not executed in the wedge', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SELF-CUSTODY-001',
+      },
+      blockchain_instruction: {
+        custody_model: 'SELF_CUSTODY',
+      },
+    }),
+  });
+
+  // Not a 400: SELF_CUSTODY is a recognised v1.3 custody model, so the request
+  // clears validation and is rejected at execution time like DELEGATED_SIGNING.
+  assert.equal(response.statusCode, 501);
+  assert.equal(response.json().error, 'not_implemented');
+
+  await app.close();
+});
+
+test('v1.3 corporate-direct flows without debtor/creditor agents are accepted', async () => {
+  const app = await buildApp();
+
+  const instructionPayload = buildInstructionPayload({
+    payment_identification: {
+      end_to_end_identification: 'INV-NO-AGENTS-001',
+    },
+  });
+  delete instructionPayload.debtor_agent;
+  delete instructionPayload.creditor_agent;
+
+  const instructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: instructionPayload,
+  });
+
+  assert.equal(instructionResponse.statusCode, 201);
+
+  const travelRulePayload = buildTravelRuleSubmission({
+    travel_rule_data: {
+      payment_identification: {
+        end_to_end_identification: 'E2E-TR-NO-AGENTS-001',
+      },
+    },
+  });
+  delete travelRulePayload.travel_rule_data.debtor_agent;
+  delete travelRulePayload.travel_rule_data.creditor_agent;
+
+  const travelRuleResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: travelRulePayload,
+  });
+
+  assert.equal(travelRuleResponse.statusCode, 201);
+
+  await app.close();
+});
+
 test('travel rule search and stats return spec-like envelope', async () => {
   const app = await buildApp();
 

@@ -111,6 +111,7 @@ Still mocked or partial:
 - webhook delivery is background-driven with retries, dead-letter handling, and operator stats, but still demo-grade rather than production-hardened
 - spec-covered conformance is explicit and tested, but still hand-authored rather than YAML-generated
 - no delegated signing implementation
+- spec layer is synced to Tom's v1.3: the server accepts v1.3 `SELF_CUSTODY` and optional debtor/creditor agents, but executes `FULL_CUSTODY` only; Spec 4 (exception & investigation, camt.110/111), the instruction-level returns/reversals endpoints, and Spec 5 (liquidity management) are not yet implemented
 - Sepolia adapter path exists, but a funded-wallet live transaction still needs to be run and captured
 - reviewer/demo package is now present, but still built around the current mock EVM wedge
 

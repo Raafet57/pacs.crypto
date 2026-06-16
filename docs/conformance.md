@@ -20,10 +20,13 @@ Status meanings:
 | `GET /travel-rule/search` | `travel-rule-api-v1.3.yaml` | query params | `TravelRuleSearchResponse` | Implemented | Query validation now covers the spec-defined filter set used in the current server, including direction, status, callback status, currency, wallets, pagination, and sort. |
 | `GET /travel-rule/stats` | `travel-rule-api-v1.3.yaml` | query params | `TravelRuleStatsResponse` | Implemented | Stats envelope and aggregate totals are present for the current local dataset. |
 | `POST /instruction/quote` | `instruction-api-v1.3.yaml` | `QuoteRequest` | `QuoteResponse` | Implemented | Request validation now enforces token, DLI, amount, currency, and custody model fields. |
-| `POST /instruction` | `instruction-api-v1.3.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Current validation enforces the main mandatory pacs.008-derived parties, agents, amount, charge bearer, and blockchain instruction fields. |
+| `POST /instruction` | `instruction-api-v1.3.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Validation enforces the mandatory pacs.008-derived parties, amount, charge bearer, and blockchain instruction fields. Per v1.3, `debtor_agent`/`creditor_agent` are optional (corporate-direct / self-hosting flows), and `custody_model` accepts `FULL_CUSTODY`, `DELEGATED_SIGNING`, and the new `SELF_CUSTODY` — but only `FULL_CUSTODY` is executed in this wedge (the other two clear validation and return `501`). |
 | `GET /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `InstructionStatusResponse` | Implemented | The returned object includes the required status surface plus extra reference-server fields. |
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
 | `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.3.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
+| `POST /instruction/{instructionId}/return` | `instruction-api-v1.3.yaml` | `ReturnRequest` (pacs.004) | compensating-instruction response | Out of scope | New in v1.3. The reference server currently models post-settlement returns through the `return_case` exception surface (`POST /exceptions/returns`, `return_method = ON_CHAIN_COMPENSATING_TRANSFER`); aligning to this instruction-level endpoint and its reason-code vocabulary is a tracked follow-up. |
+| `POST /instruction/{instructionId}/reverse` | `instruction-api-v1.3.yaml` | `ReversalRequest` (pacs.007) | compensating-instruction response | Out of scope | New in v1.3. Sender-initiated reversal as a compensating transaction; not yet implemented as an instruction-level endpoint (see returns note). |
+| `GET /instruction/{instructionId}/reversal-status` | `instruction-api-v1.3.yaml` | n/a | `ReversalStatus` | Out of scope | New in v1.3. Reversal lifecycle read; not yet implemented. |
 | `GET /instruction/search` | `instruction-api-v1.3.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
 | `POST /report/query` | `account-reporting-api-v1.3.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance and intraday responses, synchronous or async statement delivery, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Notification subscriptions now deliver raw camt.054-style bodies and async statements are queued through the retrying delivery engine. The route remains partial because the bank-side callback endpoint and full request idempotency window are still out of scope. |
 | `GET /report/intraday` | `account-reporting-api-v1.3.yaml` | query params | `IntradayReport` | Implemented | The route now returns a root-spec camt.052-style wrapper with `group_header`, `report`, paginated `entries`, and per-token balance lines built from the reference-server reporting records. |
@@ -32,6 +35,15 @@ Status meanings:
 | `POST /report/notification/callback` | `account-reporting-api-v1.3.yaml` | `BlockchainNotification` | acknowledgement | Out of scope | This is explicitly a bank-side endpoint. The reference server is the VASP side and returns `501` to make that boundary explicit. |
 | `GET /report/search` | `account-reporting-api-v1.3.yaml` | query params | `EntrySearchResponse` | Implemented | Wallet-scoped entry search, pagination, amount/finality filters, and spec-style entry summaries are present. |
 | `GET /report/stats` | `account-reporting-api-v1.3.yaml` | query params | `ReportStatsResponse` | Implemented | Wallet-scoped token totals and grouped breakdowns are present for the current local dataset. |
+
+## v1.3 family additions (Spec 4 & Spec 5)
+
+The v1.3 release added two specifications that the current bank-to-VASP wedge does not implement as formal spec surfaces:
+
+| Spec | Status | Notes |
+|---|---|---|
+| `exception-investigation-api-v1.3.yaml` (Spec 4 — Exception & Investigation, camt.110/111) | Out of scope | The formal `/investigation/*` surface and camt.110/111 investigation types (`UTAP`, `RQFI`, `RQCH`, `ACCT`, `OTHR`) are not implemented. The reference server has a *related but divergent* operational exception surface under `/exceptions/*` (tracked below as an extension) that predates Spec 4; re-basing it onto camt.110/111 is a tracked follow-up. |
+| `liquidity-management-api-v1.3.yaml` (Spec 5 — Liquidity Management) | Out of scope | Own-account `/wallet-transfer`, `/wallet-position`, and `/wallet-limit` flows are outside the bank-to-VASP wedge and are deferred. |
 
 ## Reference-server extensions
 
@@ -55,10 +67,24 @@ These routes are real, but they are outside the current root YAML specs and ther
 - `GET /reporting/intraday`
 - `GET /reporting/statements`
 - `GET /reporting/statements/:statementId`
+- `POST /exceptions/investigations`
+- `GET /exceptions/investigations`
+- `GET /exceptions/investigations/:caseId`
+- `PATCH /exceptions/investigations/:caseId`
+- `POST /exceptions/returns`
+- `GET /exceptions/returns`
+- `GET /exceptions/returns/:returnCaseId`
+- `PATCH /exceptions/returns/:returnCaseId`
 
 The `/reporting/*` routes above remain as compatibility aliases for the earlier
 reference-server surface. New conformance work is targeting the root
 `/report/*` path family from `account-reporting-api-v1.3.yaml`.
+
+The `/exceptions/*` routes are the reference server's operational exception model
+(`investigation_case` + `return_case`). They predate v1.3 and are conceptually
+related to both Spec 4 (Exception & Investigation) and the v1.3 instruction-level
+returns/reversals endpoints, but they are a divergent surface rather than a
+conformant implementation of either — see [`exception-family.md`](exception-family.md).
 
 ## Current conformance focus
 
@@ -73,8 +99,10 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
   - delegated signing
   - bank-side reporting callback endpoint
 
-Delegated signing, non-EVM flows, richer exception families, bank-side callback
-endpoint implementation, and full request idempotency-window semantics remain
-outside the current conformance target. The current conformance layer is
+Delegated signing and `SELF_CUSTODY` execution, non-EVM flows, the formal v1.3
+Spec 4 exception-investigation surface (camt.110/111), the v1.3 instruction-level
+returns/reversals endpoints, the Spec 5 liquidity-management family, bank-side
+callback endpoint implementation, and full request idempotency-window semantics
+remain outside the current conformance target. The current conformance layer is
 hand-authored in code for the implemented wedge rather than generated directly
 from the YAML.

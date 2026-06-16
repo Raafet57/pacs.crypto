@@ -8,6 +8,33 @@ The current runtime covers `investigation_case` and `return_case` read/write
 surfaces. It does not yet implement richer bilateral cancellation or full
 remediation workflow semantics.
 
+## Relationship to v1.3 (Spec 4 and instruction returns/reversals)
+
+This first slice predates Tom's v1.3 release, which formalised two things it had
+anticipated:
+
+- **Instruction-level returns and reversals.** v1.3 adds `POST /instruction/{id}/return`
+  (pacs.004), `POST /instruction/{id}/reverse` (pacs.007), and
+  `GET /instruction/{id}/reversal-status`, modelled as **compensating transactions**
+  that leave the original instruction at `FINAL` on-chain. That is exactly the
+  "Core Rule" and "Return cases do not rewrite finality" discipline established
+  below — the design is aligned; only the surface differs. The reference server
+  currently expresses this through `return_case` (`POST /exceptions/returns`,
+  `return_method = ON_CHAIN_COMPENSATING_TRANSFER`). Re-basing it onto the
+  instruction-level endpoints and the spec's pacs.004 / pacs.007 reason-code
+  vocabulary is a tracked follow-up.
+- **A formal Exception & Investigation API (Spec 4).** v1.3 defines
+  `exception-investigation-api-v1.3.yaml` on camt.110/111 with investigation types
+  `UTAP`, `RQFI`, `RQCH`, `ACCT`, and `OTHR` over an `/investigation/*` surface.
+  The reference server's `investigation_case` is a distinct, camt.029-flavoured
+  operational model with its own `case_type` vocabulary under `/exceptions/*`.
+  Until it is re-based onto camt.110/111, the `/exceptions/*` routes are
+  reference-server extensions, **not** Spec 4 conformance (see
+  [`conformance.md`](conformance.md)).
+
+The taxonomy and object model below remain the reference server's current truth;
+the v1.3 alignment work is sequenced in [`roadmap.md`](roadmap.md).
+
 ## Purpose
 
 The current stack already has terminal and exceptional statuses:

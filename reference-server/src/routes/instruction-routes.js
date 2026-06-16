@@ -68,10 +68,11 @@ export function registerInstructionRoutes(app) {
       request.body.custody_model ??
       'FULL_CUSTODY';
 
-    if (custodyModel === 'DELEGATED_SIGNING') {
+    if (custodyModel === 'DELEGATED_SIGNING' || custodyModel === 'SELF_CUSTODY') {
       return reply.code(501).send({
         error: 'not_implemented',
-        message: 'Delegated signing is not implemented in v0.',
+        message:
+          'This wedge implements FULL_CUSTODY execution only. DELEGATED_SIGNING and SELF_CUSTODY (v1.3) are accepted by the API surface but not executed in the current reference wedge.',
       });
     }
 

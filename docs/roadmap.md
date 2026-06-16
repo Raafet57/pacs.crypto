@@ -9,7 +9,8 @@ longer about proving the mock reference stack. It is about hardening the
 execution path before funded use, then turning the same stack into a
 real-chain, reviewer-credible execution system without widening the API family
 prematurely, while tightening conformance against the now-added root camt
-reporting specification.
+reporting specification and aligning the server with Tom's v1.3 family release
+(optional agents, `SELF_CUSTODY`, Spec 4 exception/investigation, Spec 5 liquidity).
 
 ## Current Defaults
 
@@ -46,7 +47,9 @@ These defaults are locked for the next phase:
   until the execution-safety review findings are remediated
 - the current reviewer demo is still mock-backed even though the stack itself is executable
 - delegated signing remains intentionally unimplemented
+- v1.3 `SELF_CUSTODY` and optional debtor/creditor agents are accepted by request validation, but `SELF_CUSTODY` (like delegated signing) is not executed in the FULL_CUSTODY wedge
 - broader exception workflow is still shallow compared with real operator remediation
+- the v1.3 Spec 4 Exception & Investigation API (camt.110/111) and instruction-level returns/reversals endpoints are not yet implemented; the `/exceptions/*` first slice is a divergent precursor
 
 ### Explicitly deferred
 
@@ -55,6 +58,7 @@ These defaults are locked for the next phase:
 - CBDC
 - regulated DeFi
 - agent-driven flows
+- Spec 5 liquidity management (own-account wallet transfer / position / limit flows)
 
 ## Roadmap
 
@@ -193,6 +197,7 @@ follow-up on real-chain flows.
 
 Deliverables:
 
+- re-base the `/exceptions/*` first slice onto v1.3 Spec 4 (camt.110/111 investigation types `UTAP` / `RQFI` / `RQCH` / `ACCT` / `OTHR`) and expose the instruction-level `POST /instruction/{id}/return` and `/reverse` (pacs.004 / pacs.007) compensating-transaction endpoints
 - richer `investigation_case` transitions and operator workflow
 - richer `return_case` remediation semantics across off-chain refund and compensating-transfer patterns
 - stronger linkage from exception records to real-chain evidence, finality, and reporting consequences
@@ -218,6 +223,7 @@ Deliverables:
 
 - delegated-signing support on the existing instruction family
 - unsigned transaction return plus signed transaction resubmission for the Sepolia wedge
+- v1.3 `SELF_CUSTODY` recording of originator-executed transfers on the same instruction family
 - conformance and demo coverage for the delegated path
 
 Success criteria:
@@ -238,6 +244,7 @@ Candidate areas:
 - CBDC
 - regulated DeFi
 - agent-driven flows
+- Spec 5 liquidity management (own-account flows: `/wallet-transfer`, `/wallet-position`, `/wallet-limit`)
 
 Success criteria:
 
