@@ -333,6 +333,24 @@ export function createMockEvmChainAdapter() {
       return buildAdapterMetadata(this, input);
     },
 
+    // Epic 13 — delegated signing: produce a simulated unsigned transaction for
+    // the instructing party to sign and resubmit. A real adapter returns the
+    // actual RLP/PSBT/etc. payload here.
+    buildUnsignedTransaction(record = {}) {
+      const policy = resolveSimulationPolicy(record);
+      return {
+        transaction_format: 'RLP_EVM',
+        transaction_format_description:
+          'Simulated unsigned EIP-1559 transaction for delegated signing.',
+        transaction_data: `0x${hashText(
+          `unsigned:${record.instruction_id ?? ''}:${record.created_at ?? ''}`,
+        )}`,
+        gas_limit: policy.gasLimit,
+        max_fee_per_gas_gwei: policy.baseFeeGwei.toFixed(1),
+        max_priority_fee_per_gas_gwei: policy.priorityFeeGwei.toFixed(1),
+      };
+    },
+
     buildQuoteResponse(request = {}) {
       const createdAt = nowIso();
       const validUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();

@@ -881,7 +881,7 @@ test('instruction search validates spec query parameters', async () => {
   await app.close();
 });
 
-test('delegated signing remains explicitly out of scope', async () => {
+test('delegated signing returns an unsigned transaction and accepts a signed transaction', async () => {
   const app = await buildApp();
 
   const createResponse = await app.inject({
@@ -902,19 +902,77 @@ test('delegated signing remains explicitly out of scope', async () => {
     }),
   });
 
-  assert.equal(createResponse.statusCode, 501);
-  assert.equal(createResponse.json().error, 'not_implemented');
+  assert.equal(createResponse.statusCode, 201);
+  const created = createResponse.json();
+  assert.equal(created.awaiting_signed_transaction, true);
+  assert.ok(created.unsigned_transaction, 'unsigned_transaction returned on submission');
+  assert.equal(created.unsigned_transaction.transaction_format, 'RLP_EVM');
+  const instructionId = created.instruction_id;
 
-  const signedTransactionResponse = await app.inject({
+  // While awaiting signature the lifecycle is held at PENDING.
+  const held = await app.inject({ method: 'GET', url: `/instruction/${instructionId}` });
+  assert.equal(held.json().status, 'PENDING');
+  assert.equal(held.json().awaiting_signed_transaction, true);
+
+  // An empty signed-transaction body is rejected.
+  const badSign = await app.inject({
     method: 'POST',
-    url: '/instruction/550e8400-e29b-41d4-a716-446655440000/signed-transaction',
+    url: `/instruction/${instructionId}/signed-transaction`,
+    payload: {},
+  });
+  assert.equal(badSign.statusCode, 400);
+
+  // Submitting the signed transaction lifts the gate.
+  const signResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instructionId}/signed-transaction`,
     payload: {
-      signed_transaction: '0xdeadbeef',
+      transaction_format: 'RLP_EVM',
+      signed_transaction_data: '0xsigneddeadbeef',
     },
   });
+  assert.equal(signResponse.statusCode, 200);
+  assert.equal(signResponse.json().awaiting_signed_transaction, false);
+  assert.equal(
+    signResponse.json().signed_transaction.signed_transaction_data,
+    '0xsigneddeadbeef',
+  );
 
-  assert.equal(signedTransactionResponse.statusCode, 501);
-  assert.equal(signedTransactionResponse.json().error, 'not_implemented');
+  // Resubmitting is now a conflict.
+  const reSign = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instructionId}/signed-transaction`,
+    payload: { signed_transaction_data: '0xagain' },
+  });
+  assert.equal(reSign.statusCode, 409);
+
+  await app.close();
+});
+
+test('signed-transaction submission is rejected for unknown and non-delegated instructions', async () => {
+  const app = await buildApp();
+
+  const notFound = await app.inject({
+    method: 'POST',
+    url: '/instruction/550e8400-e29b-41d4-a716-446655440000/signed-transaction',
+    payload: { signed_transaction_data: '0xabc' },
+  });
+  assert.equal(notFound.statusCode, 404);
+
+  const create = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: { end_to_end_identification: 'INV-FULL-NOSIGN' },
+    }),
+  });
+  const fullCustodyId = create.json().instruction_id;
+  const conflict = await app.inject({
+    method: 'POST',
+    url: `/instruction/${fullCustodyId}/signed-transaction`,
+    payload: { signed_transaction_data: '0xabc' },
+  });
+  assert.equal(conflict.statusCode, 409);
 
   await app.close();
 });

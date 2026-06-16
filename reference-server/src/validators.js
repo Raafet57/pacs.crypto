@@ -259,6 +259,15 @@ const ATTESTATION_STANDARDS = new Set([
   'OTHER',
 ]);
 
+// Epic 13 — delegated signing.
+const TRANSACTION_FORMATS = new Set([
+  'RLP_EVM',
+  'PSBT_BITCOIN',
+  'SOLANA_TRANSACTION',
+  'XDR_XRP',
+  'OTHER',
+]);
+
 function pushError(errors, field, message) {
   errors.push({ field, message });
 }
@@ -1014,6 +1023,29 @@ export function validateInstructionSubmission(body) {
   );
   validateDateTimeField(errors, body.expiry_date_time, 'expiry_date_time');
 
+  return errors;
+}
+
+export function validateSignedTransactionSubmission(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateTextField(
+    errors,
+    body.signed_transaction_data,
+    'signed_transaction_data',
+    'signed_transaction_data is required.',
+  );
+  validateEnumField(
+    errors,
+    body.transaction_format,
+    TRANSACTION_FORMATS,
+    'transaction_format',
+    'transaction_format',
+  );
   return errors;
 }
 

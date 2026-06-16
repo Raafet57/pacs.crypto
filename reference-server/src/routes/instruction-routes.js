@@ -3,6 +3,7 @@ import {
   validateInstructionSearchQuery,
   validateInstructionSubmission,
   validateQuoteRequest,
+  validateSignedTransactionSubmission,
 } from '../validators.js';
 
 function sendValidationError(reply, errors) {
@@ -68,11 +69,11 @@ export function registerInstructionRoutes(app) {
       request.body.custody_model ??
       'FULL_CUSTODY';
 
-    if (custodyModel === 'DELEGATED_SIGNING' || custodyModel === 'SELF_CUSTODY') {
+    if (custodyModel === 'SELF_CUSTODY') {
       return reply.code(501).send({
         error: 'not_implemented',
         message:
-          'This wedge implements FULL_CUSTODY execution only. DELEGATED_SIGNING and SELF_CUSTODY (v1.3) are accepted by the API surface but not executed in the current reference wedge.',
+          'This wedge executes FULL_CUSTODY and DELEGATED_SIGNING. SELF_CUSTODY (v1.3) is accepted by the API surface but not executed in the current reference wedge.',
       });
     }
 
@@ -120,11 +121,38 @@ export function registerInstructionRoutes(app) {
     return app.store.toInstructionDetailResponse(instruction);
   });
 
-  app.post('/instruction/:instructionId/signed-transaction', async (_request, reply) => {
-    return reply.code(501).send({
-      error: 'not_implemented',
-      message: 'Delegated signing is not implemented in v0.',
-    });
+  app.post('/instruction/:instructionId/signed-transaction', async (request, reply) => {
+    const errors = validateSignedTransactionSubmission(request.body);
+    if (errors.length) {
+      return sendValidationError(reply, errors);
+    }
+
+    const result = await app.store.submitSignedTransactionAsync(
+      request.params.instructionId,
+      request.body,
+    );
+
+    if (result.error === 'not_found') {
+      return reply.code(404).send({
+        error: 'not_found',
+        message: 'Instruction not found.',
+      });
+    }
+    if (result.error === 'not_delegated') {
+      return reply.code(409).send({
+        error: 'invalid_state',
+        message:
+          'Signed transaction submission is only valid for DELEGATED_SIGNING instructions.',
+      });
+    }
+    if (result.error === 'not_awaiting') {
+      return reply.code(409).send({
+        error: 'invalid_state',
+        message: 'Instruction is not awaiting a signed transaction.',
+      });
+    }
+
+    return app.store.toInstructionDetailResponse(result.record);
   });
 
   app.get('/instruction/search', async (request, reply) => {

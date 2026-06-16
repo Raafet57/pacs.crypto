@@ -314,6 +314,8 @@ function buildInstructionResponse(record, chainAdapter = null) {
     fee_estimate: record.fee_estimate,
     expiry_date_time: record.expiry_date_time,
     debit_timing: record.debit_timing,
+    awaiting_signed_transaction: record.awaiting_signed_transaction ?? false,
+    unsigned_transaction: record.unsigned_transaction ?? null,
     adapter_metadata: buildAdapterMetadata(chainAdapter, record),
     created_at: record.created_at,
   };
@@ -3165,6 +3167,19 @@ export class ReferenceStore {
       ],
     };
 
+    // Epic 13 — delegated signing: hold the instruction with an unsigned
+    // transaction until the instructing party submits the signed transaction.
+    if (
+      record.custody_model === 'DELEGATED_SIGNING' &&
+      initialStatus === 'PENDING'
+    ) {
+      record.awaiting_signed_transaction = true;
+      record.unsigned_transaction =
+        typeof this.chainAdapter.buildUnsignedTransaction === 'function'
+          ? this.chainAdapter.buildUnsignedTransaction(record)
+          : { transaction_format: 'OTHER' };
+    }
+
     this.insertInstructionStmt.run(
       record.instruction_id,
       record.status,
@@ -3177,7 +3192,8 @@ export class ReferenceStore {
 
     if (
       typeof this.chainAdapter.submitLifecycleState === 'function' &&
-      initialStatus === 'PENDING'
+      initialStatus === 'PENDING' &&
+      !record.awaiting_signed_transaction
     ) {
       const lifecycleState = await this.chainAdapter.submitLifecycleState(record);
       const submitted = buildInstructionLifecycleUpdate(record, lifecycleState);
@@ -3192,6 +3208,51 @@ export class ReferenceStore {
     }
 
     return record;
+  }
+
+  async submitSignedTransactionAsync(instructionId, submission = {}) {
+    const current = await this.getInstructionAsync(instructionId);
+    if (!current) {
+      return { error: 'not_found' };
+    }
+    if (current.custody_model !== 'DELEGATED_SIGNING') {
+      return { error: 'not_delegated', current };
+    }
+    if (!current.awaiting_signed_transaction) {
+      return { error: 'not_awaiting', current };
+    }
+
+    const signedAt = nowIso();
+    const updated = {
+      ...current,
+      awaiting_signed_transaction: false,
+      signed_transaction: {
+        transaction_format:
+          submission.transaction_format ??
+          current.unsigned_transaction?.transaction_format ??
+          'RLP_EVM',
+        signed_transaction_data: submission.signed_transaction_data,
+        submitted_at: signedAt,
+      },
+      // The delegated signer broadcasts after signing; reset the simulated
+      // lifecycle clock so progression starts from signature time.
+      created_at: signedAt,
+      updated_at: signedAt,
+      status: 'PENDING',
+      status_history: [
+        buildInstructionStatusEvent({ status: 'PENDING', statusAt: signedAt }),
+      ],
+    };
+
+    this.saveInstruction(updated, {
+      previousRecord: current,
+      emitEvents: true,
+      emitNotifications: true,
+    });
+
+    return {
+      record: await this.advanceInstructionLifecycleAsync(updated, { persist: true }),
+    };
   }
 
   toInstructionResponse(record) {
@@ -5202,6 +5263,10 @@ export class ReferenceStore {
       status_history: normalizeInstructionStatusHistory(record.status_history, record),
     };
 
+    if (normalized.awaiting_signed_transaction) {
+      return normalized;
+    }
+
     if (!['PENDING', 'BROADCAST', 'CONFIRMING'].includes(normalized.status)) {
       if (persist && serialize(normalized) !== serialize(record)) {
         this.saveInstruction(normalized, {
@@ -5239,6 +5304,10 @@ export class ReferenceStore {
         )),
       status_history: normalizeInstructionStatusHistory(record.status_history, record),
     };
+
+    if (normalized.awaiting_signed_transaction) {
+      return normalized;
+    }
 
     if (!['PENDING', 'BROADCAST', 'CONFIRMING'].includes(normalized.status)) {
       if (persist && serialize(normalized) !== serialize(record)) {
