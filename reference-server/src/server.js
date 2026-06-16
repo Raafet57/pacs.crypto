@@ -1,10 +1,15 @@
 import { loadConfig } from './config.js';
 import { buildApp } from './app.js';
 import { createSepoliaUsdcAdapter } from './chain/sepolia-usdc-adapter.js';
+import { createMockCctpAdapter } from './chain/mock-cctp-adapter.js';
 
 function buildConfiguredChainAdapter(config) {
   if (config.chainAdapter.id === 'sepolia-usdc') {
     return createSepoliaUsdcAdapter(config.chainAdapter.sepolia);
+  }
+
+  if (config.chainAdapter.id === 'mock-cctp') {
+    return createMockCctpAdapter();
   }
 
   return null;
