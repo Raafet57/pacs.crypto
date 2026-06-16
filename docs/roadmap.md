@@ -135,7 +135,7 @@ Current status:
 Target window: Q2 to Q3 2026
 
 Objective:
-Bring the executable reporting runtime closer to `camt-crypto-reporting-v1.yaml`
+Bring the executable reporting runtime closer to `account-reporting-api-v1.3.yaml`
 without widening the execution corridor.
 
 Deliverables:

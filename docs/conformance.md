@@ -13,25 +13,25 @@ Status meanings:
 
 | Endpoint | Spec | Request schema | Response schema | Status | Notes |
 |---|---|---|---|---|---|
-| `POST /travel-rule` | `travel-rule-api-v3.yaml` | `TravelRuleSubmission` | `TravelRuleRecord` | Implemented | Request validation now enforces the main required pacs.008-style objects used in the current wedge. |
-| `GET /travel-rule/{recordId}` | `travel-rule-api-v3.yaml` | n/a | `TravelRuleRecord` | Implemented | Returns the persisted compliance record. |
-| `PUT /travel-rule/{recordId}` | `travel-rule-api-v3.yaml` | `TravelRuleSubmission` | `TravelRuleRecord` | Implemented | Correction flow remains tied to the current record lifecycle model. |
-| `POST /travel-rule/{recordId}/callback` | `travel-rule-api-v3.yaml` | `TravelRuleCallback` | `TravelRuleCallbackReceipt` | Implemented | Request validation follows the callback schema and the route now returns the receipt object defined in the spec. |
-| `GET /travel-rule/search` | `travel-rule-api-v3.yaml` | query params | `TravelRuleSearchResponse` | Implemented | Query validation now covers the spec-defined filter set used in the current server, including direction, status, callback status, currency, wallets, pagination, and sort. |
-| `GET /travel-rule/stats` | `travel-rule-api-v3.yaml` | query params | `TravelRuleStatsResponse` | Implemented | Stats envelope and aggregate totals are present for the current local dataset. |
-| `POST /instruction/quote` | `instruction-api-v1.yaml` | `QuoteRequest` | `QuoteResponse` | Implemented | Request validation now enforces token, DLI, amount, currency, and custody model fields. |
-| `POST /instruction` | `instruction-api-v1.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Current validation enforces the main mandatory pacs.008-derived parties, agents, amount, charge bearer, and blockchain instruction fields. |
-| `GET /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `InstructionStatusResponse` | Implemented | The returned object includes the required status surface plus extra reference-server fields. |
-| `DELETE /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
-| `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
-| `GET /instruction/search` | `instruction-api-v1.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
-| `POST /report/query` | `camt-crypto-reporting-v1.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance and intraday responses, synchronous or async statement delivery, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Notification subscriptions now deliver raw camt.054-style bodies and async statements are queued through the retrying delivery engine. The route remains partial because the bank-side callback endpoint and full request idempotency window are still out of scope. |
-| `GET /report/intraday` | `camt-crypto-reporting-v1.yaml` | query params | `IntradayReport` | Implemented | The route now returns a root-spec camt.052-style wrapper with `group_header`, `report`, paginated `entries`, and per-token balance lines built from the reference-server reporting records. |
-| `GET /report/statement` | `camt-crypto-reporting-v1.yaml` | query params | `WalletStatement` | Implemented | The route now returns a root-spec camt.053-style wrapper with `group_header`, `statement`, paginated booked entries, and statement-period balance lines for the current wallet/date filters. |
-| `GET /report/notification/{notificationId}` | `camt-crypto-reporting-v1.yaml` | n/a | `BlockchainNotification` | Implemented | The route now returns a root-spec camt.054-style wrapper with `group_header`, `account`, and `entry` derived from the underlying reporting notification and instruction context. |
-| `POST /report/notification/callback` | `camt-crypto-reporting-v1.yaml` | `BlockchainNotification` | acknowledgement | Out of scope | This is explicitly a bank-side endpoint. The reference server is the VASP side and returns `501` to make that boundary explicit. |
-| `GET /report/search` | `camt-crypto-reporting-v1.yaml` | query params | `EntrySearchResponse` | Implemented | Wallet-scoped entry search, pagination, amount/finality filters, and spec-style entry summaries are present. |
-| `GET /report/stats` | `camt-crypto-reporting-v1.yaml` | query params | `ReportStatsResponse` | Implemented | Wallet-scoped token totals and grouped breakdowns are present for the current local dataset. |
+| `POST /travel-rule` | `travel-rule-api-v1.3.yaml` | `TravelRuleSubmission` | `TravelRuleRecord` | Implemented | Request validation now enforces the main required pacs.008-style objects used in the current wedge. |
+| `GET /travel-rule/{recordId}` | `travel-rule-api-v1.3.yaml` | n/a | `TravelRuleRecord` | Implemented | Returns the persisted compliance record. |
+| `PUT /travel-rule/{recordId}` | `travel-rule-api-v1.3.yaml` | `TravelRuleSubmission` | `TravelRuleRecord` | Implemented | Correction flow remains tied to the current record lifecycle model. |
+| `POST /travel-rule/{recordId}/callback` | `travel-rule-api-v1.3.yaml` | `TravelRuleCallback` | `TravelRuleCallbackReceipt` | Implemented | Request validation follows the callback schema and the route now returns the receipt object defined in the spec. |
+| `GET /travel-rule/search` | `travel-rule-api-v1.3.yaml` | query params | `TravelRuleSearchResponse` | Implemented | Query validation now covers the spec-defined filter set used in the current server, including direction, status, callback status, currency, wallets, pagination, and sort. |
+| `GET /travel-rule/stats` | `travel-rule-api-v1.3.yaml` | query params | `TravelRuleStatsResponse` | Implemented | Stats envelope and aggregate totals are present for the current local dataset. |
+| `POST /instruction/quote` | `instruction-api-v1.3.yaml` | `QuoteRequest` | `QuoteResponse` | Implemented | Request validation now enforces token, DLI, amount, currency, and custody model fields. |
+| `POST /instruction` | `instruction-api-v1.3.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Current validation enforces the main mandatory pacs.008-derived parties, agents, amount, charge bearer, and blockchain instruction fields. |
+| `GET /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `InstructionStatusResponse` | Implemented | The returned object includes the required status surface plus extra reference-server fields. |
+| `DELETE /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
+| `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.3.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
+| `GET /instruction/search` | `instruction-api-v1.3.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
+| `POST /report/query` | `account-reporting-api-v1.3.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance and intraday responses, synchronous or async statement delivery, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Notification subscriptions now deliver raw camt.054-style bodies and async statements are queued through the retrying delivery engine. The route remains partial because the bank-side callback endpoint and full request idempotency window are still out of scope. |
+| `GET /report/intraday` | `account-reporting-api-v1.3.yaml` | query params | `IntradayReport` | Implemented | The route now returns a root-spec camt.052-style wrapper with `group_header`, `report`, paginated `entries`, and per-token balance lines built from the reference-server reporting records. |
+| `GET /report/statement` | `account-reporting-api-v1.3.yaml` | query params | `WalletStatement` | Implemented | The route now returns a root-spec camt.053-style wrapper with `group_header`, `statement`, paginated booked entries, and statement-period balance lines for the current wallet/date filters. |
+| `GET /report/notification/{notificationId}` | `account-reporting-api-v1.3.yaml` | n/a | `BlockchainNotification` | Implemented | The route now returns a root-spec camt.054-style wrapper with `group_header`, `account`, and `entry` derived from the underlying reporting notification and instruction context. |
+| `POST /report/notification/callback` | `account-reporting-api-v1.3.yaml` | `BlockchainNotification` | acknowledgement | Out of scope | This is explicitly a bank-side endpoint. The reference server is the VASP side and returns `501` to make that boundary explicit. |
+| `GET /report/search` | `account-reporting-api-v1.3.yaml` | query params | `EntrySearchResponse` | Implemented | Wallet-scoped entry search, pagination, amount/finality filters, and spec-style entry summaries are present. |
+| `GET /report/stats` | `account-reporting-api-v1.3.yaml` | query params | `ReportStatsResponse` | Implemented | Wallet-scoped token totals and grouped breakdowns are present for the current local dataset. |
 
 ## Reference-server extensions
 
@@ -58,7 +58,7 @@ These routes are real, but they are outside the current root YAML specs and ther
 
 The `/reporting/*` routes above remain as compatibility aliases for the earlier
 reference-server surface. New conformance work is targeting the root
-`/report/*` path family from `camt-crypto-reporting-v1.yaml`.
+`/report/*` path family from `account-reporting-api-v1.3.yaml`.
 
 ## Current conformance focus
 
@@ -67,7 +67,7 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
 - stricter request validation for the spec-covered write routes
 - stricter query validation for the spec-covered search and stats routes
 - response-shape coverage for the core spec-covered read and search routes
-- reporting path-family alignment against `camt-crypto-reporting-v1.yaml`
+- reporting path-family alignment against `account-reporting-api-v1.3.yaml`
 - wallet-scoped notification subscription support on top of the webhook subsystem
 - explicit documentation of the current out-of-scope spec surface:
   - delegated signing

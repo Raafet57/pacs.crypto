@@ -89,8 +89,8 @@ npm start
 
 Open these files locally and switch both to `Live API` mode:
 
-- `travel-rule-simulator-v3.html`
-- `instruction-simulator-v1.html`
+- `travel-rule-simulator-v1.3.html`
+- `instruction-simulator-v1.3.html`
 
 Keep the base URL at `http://127.0.0.1:5050`.
 
