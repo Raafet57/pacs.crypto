@@ -116,7 +116,8 @@ Current status:
 - wrong-network RPC configuration now fails safely
 - preflight and demo-run scripts now exist for the funded-wallet path
 - live execution is unblocked from the Epic 10A safety review perspective
-- real funded-wallet broadcast still needs to be run and captured
+- real funded-wallet broadcast still needs to be run and captured (one human-authorised, funded action)
+- the funded-run acceptance is now ENCODED as a gated integration test (`test/sepolia-funded.integration.test.js`): it submits a real instruction, polls to `FINAL`, and asserts a real on-chain tx hash the moment `REF_SERVER_SEPOLIA_FUNDED_TEST=1` and the `REF_SERVER_SEPOLIA_*` credentials are present (skips cleanly otherwise)
 
 Acceptance criteria:
 
@@ -144,6 +145,7 @@ Current status:
 - real-chain demo runner and preflight scripts are in place for the funded-wallet path
 - reviewer-summary generation is now scripted so a captured run can be turned into a Tom-facing markdown evidence pack immediately
 - reviewer evidence generation must not be used for a funded run until Epic 10A is complete
+- the real-chain happy path is encoded as a gated integration test (see Epic 10); the reviewer evidence bundle is produced by `npm run demo:sepolia` once a funded run is authorised
 
 Acceptance criteria:
 
