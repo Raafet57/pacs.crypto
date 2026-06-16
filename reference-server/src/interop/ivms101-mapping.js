@@ -50,7 +50,8 @@ function fromIvmsLegalPerson(persons = [], accountNumber = []) {
   const country = legalPerson.countryOfRegistration;
   const wallet = accountNumber?.[0];
 
-  const party = { name };
+  const party = {};
+  if (name !== undefined) party.name = name;
   if (lei) party.lei = lei;
   if (country) party.postal_address = { country };
 
@@ -72,11 +73,11 @@ export function travelRuleDataToIvms101(data = {}) {
 
   const ivms101 = {
     originator: {
-      originatorPersons: [ivmsLegalPerson(data.debtor ?? {})],
+      originatorPersons: data.debtor?.name ? [ivmsLegalPerson(data.debtor)] : [],
       accountNumber: debtorWallet ? [debtorWallet] : [],
     },
     beneficiary: {
-      beneficiaryPersons: [ivmsLegalPerson(data.creditor ?? {})],
+      beneficiaryPersons: data.creditor?.name ? [ivmsLegalPerson(data.creditor)] : [],
       accountNumber: creditorWallet ? [creditorWallet] : [],
     },
   };

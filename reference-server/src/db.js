@@ -3260,17 +3260,35 @@ export class ReferenceStore {
         submitted_at: signedAt,
       },
       updated_at: signedAt,
+      // created_at (acceptance) is preserved for reporting booking dates and
+      // history; the executed lifecycle resumes from signature time via
+      // lifecycle_anchor_at, so a late signature does not jump straight to FINAL.
+      lifecycle_anchor_at: signedAt,
     };
-    // created_at (acceptance time) is preserved so reporting booking dates and
-    // status history stay anchored to acceptance; the simulated lifecycle
-    // resumes from there. An instruction signed after its expiry is already
-    // EXPIRED by the held-state gate, so it never reaches this point.
 
     this.saveInstruction(updated, {
       previousRecord: current,
       emitEvents: true,
       emitNotifications: true,
     });
+
+    // The signed transaction must actually be broadcast. A real adapter
+    // broadcasts inside submitLifecycleState (the held record skipped it at
+    // creation); the mock adapter has no such hook and progresses on the
+    // simulated clock instead.
+    if (typeof this.chainAdapter.submitLifecycleState === 'function') {
+      const lifecycleState = await this.chainAdapter.submitLifecycleState(updated);
+      const submitted = buildInstructionLifecycleUpdate(updated, lifecycleState);
+      if (serialize(submitted) !== serialize(updated)) {
+        this.saveInstruction(submitted, {
+          previousRecord: updated,
+          emitEvents: true,
+          emitNotifications: true,
+        });
+        return { record: submitted };
+      }
+      return { record: updated };
+    }
 
     return {
       record: await this.advanceInstructionLifecycleAsync(updated, { persist: true }),
@@ -5101,6 +5119,8 @@ export class ReferenceStore {
     const updated = {
       ...current,
       status: 'CANCELLED',
+      awaiting_signed_transaction: false,
+      unsigned_transaction: null,
       updated_at: cancelledAt,
       failure_reason: null,
       status_history: appendInstructionStatusEvent(
@@ -5148,6 +5168,8 @@ export class ReferenceStore {
     const updated = {
       ...current,
       status: 'CANCELLED',
+      awaiting_signed_transaction: false,
+      unsigned_transaction: null,
       updated_at: cancelledAt,
       failure_reason: null,
       status_history: appendInstructionStatusEvent(
@@ -5311,7 +5333,7 @@ export class ReferenceStore {
       status_history: normalizeInstructionStatusHistory(record.status_history, record),
     };
 
-    if (normalized.awaiting_signed_transaction) {
+    if (normalized.awaiting_signed_transaction && normalized.status === 'PENDING') {
       if (this.chainAdapter.hasExpired(normalized.expiry_date_time)) {
         return this.releaseExpiredHold(normalized, record, persist);
       }
@@ -5356,7 +5378,7 @@ export class ReferenceStore {
       status_history: normalizeInstructionStatusHistory(record.status_history, record),
     };
 
-    if (normalized.awaiting_signed_transaction) {
+    if (normalized.awaiting_signed_transaction && normalized.status === 'PENDING') {
       if (this.chainAdapter.hasExpired(normalized.expiry_date_time)) {
         return this.releaseExpiredHold(normalized, record, persist);
       }

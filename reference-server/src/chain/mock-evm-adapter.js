@@ -402,18 +402,24 @@ export function createMockEvmChainAdapter() {
       }
 
       const policy = resolveSimulationPolicy(record);
+      // Delegated-signing instructions resume from signature time, so anchor the
+      // executed-state timestamps there (lifecycle_anchor_at) rather than at
+      // acceptance (created_at).
+      const anchorAt = record.lifecycle_anchor_at
+        ? Date.parse(record.lifecycle_anchor_at)
+        : createdAt;
 
       if (['PENDING', 'QUOTED', 'SLIPPAGE_EXCEEDED', 'RAMP_FAILED'].includes(status)) {
         return record.created_at;
       }
       if (status === 'BROADCAST') {
-        return new Date(createdAt + policy.broadcastDelayMs).toISOString();
+        return new Date(anchorAt + policy.broadcastDelayMs).toISOString();
       }
       if (status === 'CONFIRMING') {
-        return new Date(createdAt + policy.inclusionDelayMs).toISOString();
+        return new Date(anchorAt + policy.inclusionDelayMs).toISOString();
       }
       if (status === 'FINAL') {
-        return new Date(createdAt + policy.finalityDelayMs).toISOString();
+        return new Date(anchorAt + policy.finalityDelayMs).toISOString();
       }
 
       return record.updated_at ?? nowIso();
@@ -426,7 +432,8 @@ export function createMockEvmChainAdapter() {
         record.interbank_settlement_amount?.amount,
         record,
       );
-      const elapsedMs = Date.now() - Date.parse(record.created_at);
+      const anchorMs = Date.parse(record.lifecycle_anchor_at ?? record.created_at);
+      const elapsedMs = Date.now() - anchorMs;
       const transactionSeed =
         record.instruction_id ??
         record.payment_identification?.uetr ??
@@ -435,9 +442,7 @@ export function createMockEvmChainAdapter() {
       const transactionHash =
         normalizedSettlement.transaction_hash ?? buildMockTransactionHash(transactionSeed);
       const blockNumber = deriveBlockNumber(record, policy);
-      const blockTimestamp = new Date(
-        Date.parse(record.created_at) + policy.inclusionDelayMs,
-      ).toISOString();
+      const blockTimestamp = new Date(anchorMs + policy.inclusionDelayMs).toISOString();
 
       if (record.status === 'PENDING' && this.hasExpired(record.expiry_date_time)) {
         return {

@@ -28,7 +28,9 @@ export function x402IntentToInstruction(intent = {}, options = {}) {
 
   const payer = intent.payer ?? {};
   if (!payer.name) warnings.push('payer.name missing — required for a valid instruction');
-  if (!intent.amount) warnings.push('amount missing — required for a valid instruction');
+  if (intent.amount === undefined || intent.amount === null || intent.amount === '') {
+    warnings.push('amount missing — required for a valid instruction');
+  }
 
   const debtor = { name: payer.name };
   if (payer.lei) debtor.lei = payer.lei;

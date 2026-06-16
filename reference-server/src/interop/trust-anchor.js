@@ -54,8 +54,9 @@ export function verifyAccessCredential(credential = {}, policy = {}) {
   if (policy.require_vlei && !credential.subject?.vlei_credential) {
     reasons.push('policy requires a vLEI-bound subject');
   }
-  const now = policy.now ?? new Date().toISOString();
-  if (credential.expires_at && Date.parse(credential.expires_at) < Date.parse(now)) {
+  const parsedNow = policy.now ? Date.parse(policy.now) : Date.now();
+  const now = Number.isNaN(parsedNow) ? Date.now() : parsedNow;
+  if (credential.expires_at && Date.parse(credential.expires_at) < now) {
     reasons.push('credential has expired');
   }
 
