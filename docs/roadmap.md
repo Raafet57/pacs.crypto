@@ -235,7 +235,10 @@ Success criteria:
 Target window: after Q1 2027
 
 Objective:
-Expand only after the Sepolia-backed wedge is credible.
+Expand only after the Sepolia-backed wedge is credible. The DeFi ↔ TradFi
+interoperability directions and their horizon sequencing are detailed in
+[`interop-roadmap.md`](interop-roadmap.md), built from the research in
+[`interop-defi-tradfi.md`](interop-defi-tradfi.md).
 
 Candidate areas:
 

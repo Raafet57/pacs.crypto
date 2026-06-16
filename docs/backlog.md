@@ -213,3 +213,176 @@ Deferred items:
 Rule:
 
 - none of these start before real Sepolia execution, real-chain reviewer demo, deeper exception handling, and delegated signing are either implemented or explicitly superseded
+- the DeFi ↔ TradFi interoperability expansion of these coarse items is detailed in Epics 15–24 below and sequenced in [`interop-roadmap.md`](interop-roadmap.md)
+
+## Interoperability Directions (DeFi ↔ TradFi)
+
+These epics come from the interoperability research in
+[`interop-defi-tradfi.md`](interop-defi-tradfi.md) and are sequenced by horizon in
+[`interop-roadmap.md`](interop-roadmap.md). All are `P3` / `Deferred` relative to the
+current wedge: nothing here starts before the Epic 10–13 program and the open v1.3
+follow-ups land. The `Horizon` tag marks how cheaply each can be pulled forward (H0 =
+low-cost, additive; H3 = long-horizon, externally gated). Each maps to an opportunity
+`O1`–`O10` from the research note.
+
+### Epic 15 - DTI-first identifier hardening
+Priority: `P3`
+Status: `Deferred`
+Horizon: H0 · Opportunity: O10
+
+Work items:
+
+- make ISO 24165 DTI the primary, recommended-mandatory asset identifier across the family
+- document DTI-registry (DTIF) resolution and the contract-address fallback ordering
+- keep changes additive so existing `token_dti` / `chain_dli` usage is unaffected
+
+Acceptance criteria:
+
+- specs and reference server treat DTI as the canonical asset key, aligned to the ESMA/MiCA mandate
+- no breaking change to existing implementations
+
+### Epic 16 - vLEI verifiable organisational identity
+Priority: `P3`
+Status: `Deferred`
+Horizon: H0 (spec) / H1 (runtime) · Opportunity: O3
+
+Work items:
+
+- reserve optional `vlei_credential` fields wherever LEI appears (parties, agents) and a wallet-to-vLEI binding reference
+- add reference-server verification of presented vLEI credentials on submission and surfacing on reads
+- keep all fields optional and off-chain-data-minimising
+
+Acceptance criteria:
+
+- a counterparty's organisational identity can be computationally verified without putting sensitive data on-chain
+- LEI-only flows continue to validate unchanged
+
+### Epic 17 - Settlement-transport abstraction
+Priority: `P3`
+Status: `Deferred`
+Horizon: H1 · Opportunity: O1
+
+Work items:
+
+- define a `settlement_transport` profile (direct-EVM / Circle CCTP / Chainlink CCIP-CRE / Canton) on the instruction
+- keep the instruction data model unchanged across transports
+- document pacs.crypto's position as the open API layer above the transport, not a competing bridge
+
+Acceptance criteria:
+
+- one instruction can name different transports without data-model change
+- transport choice never alters identity, Travel Rule, or reporting semantics
+
+### Epic 18 - Cross-chain reference-stack adapters (CCTP + Canton)
+Priority: `P3`
+Status: `Deferred`
+Horizon: H1 · Opportunity: O8
+Depends on: Epic 10 (chain-adapter seam), Epic 17
+
+Work items:
+
+- implement a Circle CCTP V2 adapter (cross-chain USDC) behind the existing chain-adapter contract
+- implement a Canton / deposit-token settlement adapter as a second venue
+- keep route shapes and identifiers unchanged; surface venue context through `adapter_metadata`
+
+Acceptance criteria:
+
+- one instruction settles through at least two distinct transports unchanged
+- the mock adapter remains the default fallback
+
+### Epic 19 - Travel Rule interoperability conformance layer
+Priority: `P3`
+Status: `Deferred`
+Horizon: H1 · Opportunity: O9
+
+Work items:
+
+- publish field-level mappings from Spec 1 to TRISA, TRP, and IVMS101
+- build a conformance harness that round-trips a Spec 1 record to/from at least one external transport
+- keep pacs.crypto positioned alongside (not competing with) existing Travel Rule networks
+
+Acceptance criteria:
+
+- a Spec 1 record round-trips to/from at least one external Travel Rule transport in test
+- mapping gaps are documented rather than silently dropped
+
+### Epic 20 - Tokenised-asset / RWA transfer spec
+Priority: `P3`
+Status: `Deferred`
+Horizon: H2 · Opportunity: O2
+
+Work items:
+
+- promote the deferred "tokenised assets" item into instruction + reporting surfaces for regulated tokenised securities / RWAs
+- extend `credential_attestation` to carry ERC-7943 enforcement context and ERC-3643 identity-registry references
+- keep sanctions/tipping-off discipline intact
+
+Acceptance criteria:
+
+- a tokenised-RWA transfer carries enforcement and identity-registry references end-to-end
+- non-RWA flows are unaffected
+
+### Epic 21 - Trust Anchor / regulated-DeFi access profile
+Priority: `P3`
+Status: `Deferred`
+Horizon: H2 · Opportunity: O4
+
+Work items:
+
+- define how a bank/VASP issues and a permissioned pool verifies an access credential built from pacs.crypto identity data (LEI/vLEI + Travel Rule + screening posture)
+- model the Project Guardian "Trust Anchor" pattern at the messaging layer only
+- explicitly prohibit communicating sanctions findings or adjudication on-chain
+
+Acceptance criteria:
+
+- a permissioned-pool eligibility credential can be issued and verified without leaking sanctions reasoning
+- the profile asserts eligibility only and performs no on-chain compliance enforcement
+
+### Epic 22 - Multi-regime compliance-reporting substrate
+Priority: `P3`
+Status: `Deferred`
+Horizon: H2 · Opportunity: O7
+
+Work items:
+
+- build the planned Compliance Base Info Reporting spec as a regime-aware canonical record
+- emit MiCA `auth.116/117/118` and analogous filings under other regimes (GENIUS, MAS) from one substrate
+- keep the substrate underneath regulator-specific filing pipelines rather than owning the vertical filing flows
+
+Acceptance criteria:
+
+- one canonical record can produce at least two regime-specific outputs
+- incompatibilities between regimes are represented as data, not lost
+
+### Epic 23 - Agentic-payment settlement binding
+Priority: `P3`
+Status: `Deferred`
+Horizon: H2 · Opportunity: O5
+
+Work items:
+
+- define the mapping from an agent payment intent (x402 / AP2 / MPP) to a compliant pacs.crypto instruction
+- pre-resolve identity fields from the agent's verified principal and attach Travel Rule + structured remittance
+- position pacs.crypto as the regulated settlement + Travel Rule leg behind machine micropayments
+
+Acceptance criteria:
+
+- one agent intent produces a fully-structured, Travel-Rule-linked instruction
+- the binding adds no new custody or sanctions-adjudication responsibility to the agent layer
+
+### Epic 24 - Unified-ledger / tokenised-deposit / CBDC interop profile
+Priority: `P3`
+Status: `Deferred`
+Horizon: H3 · Opportunity: O6
+Depends on: external maturity — gate on BIS Agorá outcomes and tokenised-deposit production rollouts
+
+Work items:
+
+- define a bank-edge messaging profile that expresses "simultaneous compliance" as structured pre-settlement data for tokenised-deposit and wholesale-CBDC corridors
+- map pacs.crypto pre-settlement data onto an Agorá-style simultaneous AML/sanctions/settlement flow
+- treat this as the longest-horizon, highest-ceiling direction
+
+Acceptance criteria:
+
+- a credible mapping exists from pacs.crypto pre-settlement data to an Agorá-style simultaneous flow, validated against published Agorá outcomes
+- no build effort is committed before the external gate is cleared

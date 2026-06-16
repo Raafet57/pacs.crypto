@@ -96,6 +96,8 @@ The active forward plan is now documented in:
 - [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
 - [`docs/exception-family.md`](docs/exception-family.md) — implemented first-slice exception-family design and runtime boundaries
 - [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
+- [`docs/interop-defi-tradfi.md`](docs/interop-defi-tradfi.md) — DeFi ↔ TradFi interoperability research and new-direction opportunities (2025–2026 landscape)
+- [`docs/interop-roadmap.md`](docs/interop-roadmap.md) — horizon-based expansion roadmap built from that research
 
 ### Current Baseline
 
