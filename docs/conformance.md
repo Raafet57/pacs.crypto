@@ -45,13 +45,12 @@ The v1.3 release added two specifications that the current bank-to-VASP wedge do
 | `exception-investigation-api-v1.3.yaml` (Spec 4 — Exception & Investigation, camt.110/111) | Out of scope | The formal `/investigation/*` surface and camt.110/111 investigation types (`UTAP`, `RQFI`, `RQCH`, `ACCT`, `OTHR`) are not implemented. The reference server has a *related but divergent* operational exception surface under `/exceptions/*` (tracked below as an extension) that predates Spec 4; re-basing it onto camt.110/111 is a tracked follow-up. |
 | `liquidity-management-api-v1.3.yaml` (Spec 5 — Liquidity Management) | Out of scope | Own-account `/wallet-transfer`, `/wallet-position`, and `/wallet-limit` flows are outside the bank-to-VASP wedge and are deferred. |
 
-## Interoperability reference modules (Epics 15–23)
+## Interoperability reference modules (Epics 15–24)
 
 These are tested reference components built from the DeFi ↔ TradFi interoperability
 research ([`interop-defi-tradfi.md`](interop-defi-tradfi.md)). They prove each
-direction at the messaging layer; only the CCTP adapter and delegated signing are
-wired into HTTP routes so far, the rest are importable modules pending route
-exposure.
+direction at the messaging layer and are now exposed over HTTP under `/interop/*`
+(stateless transform endpoints) in addition to being importable modules.
 
 | Component | Epic | Form | Notes |
 |---|---|---|---|
@@ -60,6 +59,8 @@ exposure.
 | `src/interop/x402-binding.js` | 23 | module | x402 agent intent → compliant instruction; DTI-first resolution; Travel Rule gap surfaced as a warning. |
 | `src/interop/trust-anchor.js` | 21 | module | Issue/verify permissioned-pool access credentials; asserts eligibility only, no sanctions reasoning. |
 | `src/interop/compliance-reporting.js` | 22 | module | One canonical record → MiCA `auth.117`-shaped + GENIUS-shaped filings. |
+| `src/interop/unified-ledger.js` | 24 | module (scaffold) | Unified-ledger pre-settlement posture (BIS Agorá model); reference scaffold pending the external gate. |
+| `src/routes/interop-routes.js` | 19/21/22/23/24 | routes | Exposes the above modules as `/interop/*` stateless transform endpoints. |
 | `vlei_credential` / `settlement_transport` / `credential_attestation` validators | 16/17/20 | validation | Optional, additive; validated when present and round-trip through the store. |
 
 ## Reference-server extensions

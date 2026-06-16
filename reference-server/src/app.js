@@ -6,6 +6,7 @@ import { registerExceptionRoutes } from './routes/exception-routes.js';
 import { registerEventRoutes } from './routes/event-routes.js';
 import { registerHealthRoutes } from './routes/health-routes.js';
 import { registerInstructionRoutes } from './routes/instruction-routes.js';
+import { registerInteropRoutes } from './routes/interop-routes.js';
 import { registerReportingRoutes } from './routes/reporting-routes.js';
 import { registerStatusRoutes } from './routes/status-routes.js';
 import { registerTravelRuleRoutes } from './routes/travel-rule-routes.js';
@@ -121,6 +122,7 @@ export async function buildApp({
   registerEventRoutes(app);
   registerWebhookRoutes(app);
   registerReportingRoutes(app);
+  registerInteropRoutes(app);
 
   return app;
 }

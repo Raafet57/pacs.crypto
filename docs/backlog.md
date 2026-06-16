@@ -377,7 +377,7 @@ Acceptance criteria:
 
 ### Epic 24 - Unified-ledger / tokenised-deposit / CBDC interop profile
 Priority: `P3`
-Status: `Deferred`
+Status: `Reference scaffold (external gate not cleared)`
 Horizon: H3 · Opportunity: O6
 Depends on: external maturity — gate on BIS Agorá outcomes and tokenised-deposit production rollouts
 
