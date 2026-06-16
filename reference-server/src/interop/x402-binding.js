@@ -11,7 +11,10 @@
 
 function resolve(map, key, fallback = null) {
   if (!map || key === undefined || key === null) return fallback;
-  return map[key] ?? map[String(key)] ?? fallback;
+  const value = map[key] ?? map[String(key)];
+  // Treat an empty-string mapping as unresolved so chain_dli/token_dti stay
+  // consistent with the "unresolvable" warning rather than being set to ''.
+  return value === undefined || value === null || value === '' ? fallback : value;
 }
 
 export function x402IntentToInstruction(intent = {}, options = {}) {
@@ -42,12 +45,6 @@ export function x402IntentToInstruction(intent = {}, options = {}) {
     custody_model: intent.custody_model ?? 'SELF_CUSTODY',
     settlement_transport: intent.settlement_transport ?? 'DIRECT_EVM',
   };
-  if (intent.payTo) {
-    blockchainInstruction.creditor_account = {
-      proxy: { type: { code: 'EWAL' }, identification: intent.payTo },
-    };
-  }
-
   const instruction = {
     payment_identification: {
       end_to_end_identification:
@@ -62,6 +59,13 @@ export function x402IntentToInstruction(intent = {}, options = {}) {
     },
     blockchain_instruction: blockchainInstruction,
   };
+  // creditor_account belongs at the top level (pacs.008): nesting it under
+  // blockchain_instruction would drop the beneficiary wallet during normalisation.
+  if (intent.payTo) {
+    instruction.creditor_account = {
+      proxy: { type: { code: 'EWAL' }, identification: intent.payTo },
+    };
+  }
 
   // The agent layer holds payment intent, not counterparty Travel Rule identity.
   warnings.push(

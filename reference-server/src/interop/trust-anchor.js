@@ -16,6 +16,9 @@ export function buildAccessCredential(subject = {}, options = {}) {
   }
 
   const identityBound = Boolean(subject.lei || subject.vlei_credential);
+  // `eligibility` is the trust anchor's vouch (cleared to participate), not a
+  // disclosure of a screening result: NOT_ELIGIBLE is deliberately ambiguous
+  // (missing identity OR not yet attested) and never carries a reason.
   const eligible = Boolean(subject.name && identityBound && subject.screening_completed);
 
   return {
@@ -51,11 +54,8 @@ export function verifyAccessCredential(credential = {}, policy = {}) {
   if (policy.require_vlei && !credential.subject?.vlei_credential) {
     reasons.push('policy requires a vLEI-bound subject');
   }
-  if (
-    policy.now &&
-    credential.expires_at &&
-    Date.parse(credential.expires_at) < Date.parse(policy.now)
-  ) {
+  const now = policy.now ?? new Date().toISOString();
+  if (credential.expires_at && Date.parse(credential.expires_at) < Date.parse(now)) {
     reasons.push('credential has expired');
   }
 

@@ -527,6 +527,9 @@ function validateCredentialAttestation(errors, value, field) {
       `${field}.attester_address must be a non-empty string.`,
     );
   }
+  // The enforcement booleans describe the token contract's standing capabilities
+  // (e.g. ERC-7943 freeze/force-transfer support) — they must not be used to
+  // signal a per-transfer or per-counterparty compliance decision.
   if (value.enforcement !== undefined) {
     if (!isObject(value.enforcement)) {
       pushError(

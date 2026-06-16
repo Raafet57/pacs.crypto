@@ -372,7 +372,7 @@ Work items:
 
 Acceptance criteria:
 
-- one agent intent produces a fully-structured, Travel-Rule-linked instruction
+- one agent intent produces a fully-structured instruction; the Travel Rule leg is surfaced as a required-but-not-derivable warning rather than fabricated
 - the binding adds no new custody or sanctions-adjudication responsibility to the agent layer
 
 ### Epic 24 - Unified-ledger / tokenised-deposit / CBDC interop profile

@@ -648,6 +648,7 @@ function normalizeInstructionSubmission(submission) {
         '0.0010',
       ...blockchainInstruction,
     },
+    credential_attestation: submission.credential_attestation ?? null,
     travel_rule_record_id: submission.travel_rule_record_id ?? null,
     expiry_date_time:
       submission.expiry_date_time ??
@@ -2325,6 +2326,7 @@ export class ReferenceStore {
     this.chainAdapter = normalizeChainAdapter(chainAdapter);
     this.webhookRetryScheduleMs = normalizeRetryScheduleMs(webhookRetryScheduleMs);
     this.inFlightInstructionCreations = new Map();
+    this.inFlightSignedTransactions = new Map();
     this.db = new DatabaseSync(dbPath);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS travel_rule_records (
@@ -3045,6 +3047,7 @@ export class ReferenceStore {
       purpose: normalized.purpose,
       remittance_information: normalized.remittance_information,
       blockchain_instruction: normalized.blockchain_instruction,
+      credential_attestation: normalized.credential_attestation,
       fee_estimate: feeEstimate,
       on_chain_settlement: this.chainAdapter.normalizeOnChainSettlement(
         null,
@@ -3142,6 +3145,7 @@ export class ReferenceStore {
       purpose: normalized.purpose,
       remittance_information: normalized.remittance_information,
       blockchain_instruction: normalized.blockchain_instruction,
+      credential_attestation: normalized.credential_attestation,
       fee_estimate: feeEstimate,
       on_chain_settlement: await this.chainAdapter.normalizeOnChainSettlement(
         null,
@@ -3211,6 +3215,23 @@ export class ReferenceStore {
   }
 
   async submitSignedTransactionAsync(instructionId, submission = {}) {
+    // Serialize per-instruction so concurrent submissions cannot both clear the
+    // awaiting gate: a non-atomic check-then-act would double-progress the
+    // record, emit duplicate events, and lose the first writer's signed data.
+    const inFlight = this.inFlightSignedTransactions.get(instructionId);
+    if (inFlight) {
+      return inFlight;
+    }
+    const work = this.runSignedTransactionSubmission(instructionId, submission).finally(
+      () => {
+        this.inFlightSignedTransactions.delete(instructionId);
+      },
+    );
+    this.inFlightSignedTransactions.set(instructionId, work);
+    return work;
+  }
+
+  async runSignedTransactionSubmission(instructionId, submission = {}) {
     const current = await this.getInstructionAsync(instructionId);
     if (!current) {
       return { error: 'not_found' };
@@ -3218,7 +3239,10 @@ export class ReferenceStore {
     if (current.custody_model !== 'DELEGATED_SIGNING') {
       return { error: 'not_delegated', current };
     }
-    if (!current.awaiting_signed_transaction) {
+    // Guard on the held status, not just the flag: a cancelled or expired
+    // instruction can still carry awaiting_signed_transaction until a read clears
+    // it, so without the status check a cancelled payment could be revived.
+    if (current.status !== 'PENDING' || !current.awaiting_signed_transaction) {
       return { error: 'not_awaiting', current };
     }
 
@@ -3226,6 +3250,7 @@ export class ReferenceStore {
     const updated = {
       ...current,
       awaiting_signed_transaction: false,
+      unsigned_transaction: null,
       signed_transaction: {
         transaction_format:
           submission.transaction_format ??
@@ -3234,15 +3259,12 @@ export class ReferenceStore {
         signed_transaction_data: submission.signed_transaction_data,
         submitted_at: signedAt,
       },
-      // The delegated signer broadcasts after signing; reset the simulated
-      // lifecycle clock so progression starts from signature time.
-      created_at: signedAt,
       updated_at: signedAt,
-      status: 'PENDING',
-      status_history: [
-        buildInstructionStatusEvent({ status: 'PENDING', statusAt: signedAt }),
-      ],
     };
+    // created_at (acceptance time) is preserved so reporting booking dates and
+    // status history stay anchored to acceptance; the simulated lifecycle
+    // resumes from there. An instruction signed after its expiry is already
+    // EXPIRED by the held-state gate, so it never reaches this point.
 
     this.saveInstruction(updated, {
       previousRecord: current,
@@ -5250,6 +5272,32 @@ export class ReferenceStore {
     };
   }
 
+  releaseExpiredHold(normalized, record, persist) {
+    const expiredAt = nowIso();
+    const expired = {
+      ...normalized,
+      status: 'EXPIRED',
+      awaiting_signed_transaction: false,
+      unsigned_transaction: null,
+      failure_reason: 'Instruction expired before the signed transaction was submitted.',
+      updated_at: expiredAt,
+      status_history: appendInstructionStatusEvent(
+        normalized,
+        'EXPIRED',
+        expiredAt,
+        'Instruction expired before the signed transaction was submitted.',
+      ),
+    };
+    if (persist) {
+      this.saveInstruction(expired, {
+        previousRecord: record,
+        emitEvents: true,
+        emitNotifications: true,
+      });
+    }
+    return expired;
+  }
+
   advanceInstructionLifecycle(record, { persist = false } = {}) {
     const normalized = {
       ...record,
@@ -5264,6 +5312,9 @@ export class ReferenceStore {
     };
 
     if (normalized.awaiting_signed_transaction) {
+      if (this.chainAdapter.hasExpired(normalized.expiry_date_time)) {
+        return this.releaseExpiredHold(normalized, record, persist);
+      }
       return normalized;
     }
 
@@ -5306,6 +5357,9 @@ export class ReferenceStore {
     };
 
     if (normalized.awaiting_signed_transaction) {
+      if (this.chainAdapter.hasExpired(normalized.expiry_date_time)) {
+        return this.releaseExpiredHold(normalized, record, persist);
+      }
       return normalized;
     }
 
