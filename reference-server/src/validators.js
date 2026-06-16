@@ -237,6 +237,28 @@ const CALLBACK_REJECTION_CODES = new Set([
   'UNSUPPORTED_VALUE',
 ]);
 
+// v1.3 interoperability extensions (Epics 16, 17, 20). All optional and additive.
+const SETTLEMENT_TRANSPORTS = new Set([
+  'DIRECT_EVM',
+  'CCTP',
+  'CCIP',
+  'CANTON',
+]);
+
+const VLEI_CREDENTIAL_STATUSES = new Set([
+  'VALID',
+  'REVOKED',
+  'EXPIRED',
+  'SUSPENDED',
+]);
+
+const ATTESTATION_STANDARDS = new Set([
+  'EAS',
+  'ERC-3643',
+  'ERC-7943',
+  'OTHER',
+]);
+
 function pushError(errors, field, message) {
   errors.push({ field, message });
 }
@@ -441,6 +463,95 @@ function validateDateRange(errors, fromValue, toValue, fromField, toField) {
   }
 }
 
+// Epic 16 — vLEI verifiable organisational identity. Optional; validated only when present.
+function validateVleiCredential(errors, value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isObject(value)) {
+    pushError(errors, field, `${field} must be an object when provided.`);
+    return;
+  }
+  validateTextField(
+    errors,
+    value.credential_id,
+    `${field}.credential_id`,
+    `${field}.credential_id is required when ${field} is provided.`,
+  );
+  validatePatternField(
+    errors,
+    value.issuer_lei,
+    LEI_PATTERN,
+    `${field}.issuer_lei`,
+    `${field}.issuer_lei must be a valid LEI.`,
+  );
+  validateEnumField(
+    errors,
+    value.status,
+    VLEI_CREDENTIAL_STATUSES,
+    `${field}.status`,
+    `${field}.status`,
+  );
+}
+
+// Epic 20 — tokenised-asset / RWA on-chain attestation (EAS / ERC-3643 / ERC-7943).
+function validateCredentialAttestation(errors, value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isObject(value)) {
+    pushError(errors, field, `${field} must be an object when provided.`);
+    return;
+  }
+  validateEnumField(
+    errors,
+    value.standard,
+    ATTESTATION_STANDARDS,
+    `${field}.standard`,
+    `${field}.standard`,
+  );
+  if (value.attester_address !== undefined) {
+    validateTextField(
+      errors,
+      value.attester_address,
+      `${field}.attester_address`,
+      `${field}.attester_address must be a non-empty string.`,
+    );
+  }
+  if (value.enforcement !== undefined) {
+    if (!isObject(value.enforcement)) {
+      pushError(
+        errors,
+        `${field}.enforcement`,
+        `${field}.enforcement must be an object when provided.`,
+      );
+    } else {
+      validateEnumField(
+        errors,
+        value.enforcement.standard,
+        ATTESTATION_STANDARDS,
+        `${field}.enforcement.standard`,
+        `${field}.enforcement.standard`,
+      );
+      validateBooleanField(
+        errors,
+        value.enforcement.transfer_validation_required,
+        `${field}.enforcement.transfer_validation_required`,
+      );
+      validateBooleanField(
+        errors,
+        value.enforcement.can_force_transfer,
+        `${field}.enforcement.can_force_transfer`,
+      );
+      validateBooleanField(
+        errors,
+        value.enforcement.can_freeze,
+        `${field}.enforcement.can_freeze`,
+      );
+    }
+  }
+}
+
 function validateParty(errors, value, field) {
   validateRequiredField(
     errors,
@@ -467,6 +578,7 @@ function validateParty(errors, value, field) {
     `${field}.country`,
     `${field}.country must be an ISO 3166-1 alpha-2 country code.`,
   );
+  validateVleiCredential(errors, value.vlei_credential, `${field}.vlei_credential`);
 }
 
 function validateAgent(errors, value, field, { required = true } = {}) {
@@ -507,6 +619,7 @@ function validateAgent(errors, value, field, { required = true } = {}) {
     `${field}.bic`,
     `${field}.bic must be a valid BIC.`,
   );
+  validateVleiCredential(errors, value.vlei_credential, `${field}.vlei_credential`);
 }
 
 function validateWalletAccount(errors, value, field) {
@@ -884,8 +997,16 @@ export function validateInstructionSubmission(body) {
       'blockchain_instruction.maximum_slippage_rate',
       'blockchain_instruction.maximum_slippage_rate must be a decimal fraction.',
     );
+    validateEnumField(
+      errors,
+      body.blockchain_instruction.settlement_transport,
+      SETTLEMENT_TRANSPORTS,
+      'blockchain_instruction.settlement_transport',
+      'blockchain_instruction.settlement_transport',
+    );
   }
 
+  validateCredentialAttestation(errors, body.credential_attestation, 'credential_attestation');
   validateUuidField(
     errors,
     body.travel_rule_record_id,
@@ -977,6 +1098,11 @@ export function validateTravelRuleSubmission(body) {
     TRAVEL_RULE_WALLET_TYPES,
     'travel_rule_data.counterparty_wallet_type',
     'travel_rule_data.counterparty_wallet_type',
+  );
+  validateCredentialAttestation(
+    errors,
+    data.credential_attestation,
+    'travel_rule_data.credential_attestation',
   );
 
   return errors;
