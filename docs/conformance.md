@@ -24,9 +24,9 @@ Status meanings:
 | `GET /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `InstructionStatusResponse` | Implemented | The returned object includes the required status surface plus extra reference-server fields. |
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.3.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
 | `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.3.yaml` | `SignedTransactionSubmission` | delegated-signing response | Implemented | DELEGATED_SIGNING instructions are held with an `unsigned_transaction` until this route accepts the signed transaction, which lifts the gate and resumes the lifecycle (Epic 13). Only enabled on adapters that *simulate* delegated signing (`supports_delegated_signing`, i.e. the mock); a custodial adapter (Sepolia re-signs with the server key) rejects DELEGATED_SIGNING with `501`. |
-| `POST /instruction/{instructionId}/return` | `instruction-api-v1.3.yaml` | `ReturnRequest` (pacs.004) | compensating-instruction response | Out of scope | New in v1.3. The reference server currently models post-settlement returns through the `return_case` exception surface (`POST /exceptions/returns`, `return_method = ON_CHAIN_COMPENSATING_TRANSFER`); aligning to this instruction-level endpoint and its reason-code vocabulary is a tracked follow-up. |
-| `POST /instruction/{instructionId}/reverse` | `instruction-api-v1.3.yaml` | `ReversalRequest` (pacs.007) | compensating-instruction response | Out of scope | New in v1.3. Sender-initiated reversal as a compensating transaction; not yet implemented as an instruction-level endpoint (see returns note). |
-| `GET /instruction/{instructionId}/reversal-status` | `instruction-api-v1.3.yaml` | n/a | `ReversalStatus` | Out of scope | New in v1.3. Reversal lifecycle read; not yet implemented. |
+| `POST /instruction/{instructionId}/return` | `instruction-api-v1.3.yaml` | `ReturnRequest` (pacs.004) | compensating-instruction response | Partial | Implemented as a Tom v1.2-compatible instruction-level façade backed by the existing `return_case` exception model; full v1.3 reason-code vocabulary alignment remains a follow-up. |
+| `POST /instruction/{instructionId}/reverse` | `instruction-api-v1.3.yaml` | `ReversalRequest` (pacs.007) | reversal request response | Partial | Implemented as a Tom v1.2-compatible reversal request façade backed by the exception-family store; it records a request in `REQUESTED` state rather than creating a compensating instruction immediately. |
+| `GET /instruction/{instructionId}/reversal-status` | `instruction-api-v1.3.yaml` | n/a | `ReversalStatus` | Partial | Implemented as a Tom v1.2-compatible status read for the latest reversal request; compensating-instruction fields are exposed only after a later accepted/completed outcome. |
 | `GET /instruction/search` | `instruction-api-v1.3.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
 | `POST /report/query` | `account-reporting-api-v1.3.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance and intraday responses, synchronous or async statement delivery, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Notification subscriptions now deliver raw camt.054-style bodies and async statements are queued through the retrying delivery engine. The route remains partial because the bank-side callback endpoint and full request idempotency window are still out of scope. |
 | `GET /report/intraday` | `account-reporting-api-v1.3.yaml` | query params | `IntradayReport` | Implemented | The route now returns a root-spec camt.052-style wrapper with `group_header`, `report`, paginated `entries`, and per-token balance lines built from the reference-server reporting records. |
@@ -111,16 +111,18 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
 - stricter request validation for the spec-covered write routes
 - stricter query validation for the spec-covered search and stats routes
 - response-shape coverage for the core spec-covered read and search routes
+- Tom upstream v1.2 return/reverse/reversal-status alignment using the existing exception-family model as the backing store
 - reporting path-family alignment against `account-reporting-api-v1.3.yaml`
 - wallet-scoped notification subscription support on top of the webhook subsystem
 - explicit documentation of the current out-of-scope spec surface:
-  - delegated signing
+  - self-custody execution
+  - formal v1.3 Spec 4 investigation and Spec 5 liquidity-management surfaces
   - bank-side reporting callback endpoint
 
-Delegated signing and `SELF_CUSTODY` execution, non-EVM flows, the formal v1.3
-Spec 4 exception-investigation surface (camt.110/111), the v1.3 instruction-level
-returns/reversals endpoints, the Spec 5 liquidity-management family, bank-side
-callback endpoint implementation, and full request idempotency-window semantics
-remain outside the current conformance target. The current conformance layer is
-hand-authored in code for the implemented wedge rather than generated directly
-from the YAML.
+`SELF_CUSTODY` execution, non-EVM flows, the formal v1.3 Spec 4
+exception-investigation surface (camt.110/111), the Spec 5 liquidity-management
+family, bank-side callback endpoint implementation, and full request
+idempotency-window semantics remain outside the current conformance target.
+Delegated signing is limited to adapters that simulate the flow, as noted above.
+The current conformance layer is hand-authored in code for the implemented wedge
+rather than generated directly from the YAML.
