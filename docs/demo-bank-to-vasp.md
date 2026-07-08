@@ -2,10 +2,11 @@
 
 This is the reviewer-facing demo for the current `pacs.crypto` execution wedge.
 
-The repo now supports two demo modes:
+The repo supports three reviewer paths, in increasing order of setup and risk:
 
-- `mock demo` for fast local walkthroughs
-- `real-chain Sepolia + USDC demo` for reviewer evidence capture
+- **MOCK demo (no server).** The standalone [`bank-to-vasp-control-room.html`](../bank-to-vasp-control-room.html) Control Room shell walks the full happy path with sample payloads bundled into the page. No reference server, no network, no chain.
+- **LIVE local API demo.** The local reference server at `http://127.0.0.1:5050`, driven from the two HTML simulators (or the Control Room shell's Live API mode). This exercises real request validation, persistence, and lifecycle handling against the default mock EVM adapter — no funded chain by default.
+- **Real-chain Sepolia evidence capture.** An explicit, separately configured funded-wallet path that broadcasts one USDC transfer on Ethereum Sepolia and captures a reviewer evidence bundle. Not run by default.
 
 It is intentionally narrow:
 
@@ -74,6 +75,22 @@ sequenceDiagram
     Bank->>Report: GET /reporting/statements/{statementId}
     Report-->>Bank: camt.053-like creditor statement
 ```
+
+## Presenter Control Room (MOCK, no server)
+
+For a presenter-driven walkthrough that needs no setup, open
+[`bank-to-vasp-control-room.html`](../bank-to-vasp-control-room.html) directly
+from the repo root in any modern browser. It steps through the same happy path
+(Travel Rule submission and callback → quote → instruction →
+`PENDING -> BROADCAST -> CONFIRMING -> FINAL` → finality receipt → camt.054/053
+reporting) using the sample payloads bundled from `demo-samples/happy-path/`.
+In **MOCK** mode it performs no network fetch and needs no reference server.
+
+The same shell also offers a **Live API** mode that talks to the local
+reference server described below (default mock EVM adapter at
+`http://127.0.0.1:5050`); it does not touch a funded chain. Use it as the
+presenter-facing front end for the local API demo, and the two simulators below
+when you want to drive the individual endpoints directly.
 
 ## Live Walkthrough
 
@@ -207,18 +224,18 @@ The exact happy-path payload set used for this demo is under
 
 Recommended review order:
 
-1. [01-travel-rule-submit.request.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/01-travel-rule-submit.request.json>)
-2. [02-travel-rule-submit.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/02-travel-rule-submit.response.json>)
-3. [03-travel-rule-callback.request.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/03-travel-rule-callback.request.json>)
-4. [04-travel-rule-callback.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/04-travel-rule-callback.response.json>)
-5. [05-instruction-quote.request.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/05-instruction-quote.request.json>)
-6. [06-instruction-quote.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/06-instruction-quote.response.json>)
-7. [07-instruction-submit.request.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/07-instruction-submit.request.json>)
-8. [08-instruction-submit.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/08-instruction-submit.response.json>)
-9. [09-execution-status.final.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/09-execution-status.final.response.json>)
-10. [10-finality-receipt.final.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/10-finality-receipt.final.response.json>)
-11. [11-reporting-notification.creditor.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/11-reporting-notification.creditor.response.json>)
-12. [12-reporting-statement.creditor.response.json](</Users/Raafet/Projects/codex_test/PACS_CRYPTO/docs/demo-samples/happy-path/12-reporting-statement.creditor.response.json>)
+1. [01-travel-rule-submit.request.json](demo-samples/happy-path/01-travel-rule-submit.request.json)
+2. [02-travel-rule-submit.response.json](demo-samples/happy-path/02-travel-rule-submit.response.json)
+3. [03-travel-rule-callback.request.json](demo-samples/happy-path/03-travel-rule-callback.request.json)
+4. [04-travel-rule-callback.response.json](demo-samples/happy-path/04-travel-rule-callback.response.json)
+5. [05-instruction-quote.request.json](demo-samples/happy-path/05-instruction-quote.request.json)
+6. [06-instruction-quote.response.json](demo-samples/happy-path/06-instruction-quote.response.json)
+7. [07-instruction-submit.request.json](demo-samples/happy-path/07-instruction-submit.request.json)
+8. [08-instruction-submit.response.json](demo-samples/happy-path/08-instruction-submit.response.json)
+9. [09-execution-status.final.response.json](demo-samples/happy-path/09-execution-status.final.response.json)
+10. [10-finality-receipt.final.response.json](demo-samples/happy-path/10-finality-receipt.final.response.json)
+11. [11-reporting-notification.creditor.response.json](demo-samples/happy-path/11-reporting-notification.creditor.response.json)
+12. [12-reporting-statement.creditor.response.json](demo-samples/happy-path/12-reporting-statement.creditor.response.json)
 
 ## What To Say
 
@@ -238,6 +255,9 @@ Still intentionally out of scope:
 
 - delegated signing
 - non-EVM chains
-- production-chain execution
+- production-chain execution by default (real-chain Sepolia is an explicit, separately configured evidence path only)
 - deeper exception workflow beyond the first-slice investigation/return APIs
 - tokenized assets, CBDC, or DeFi expansion
+
+And do not claim more than a community proposal: this is not a standardized,
+certified, or production-ready system.

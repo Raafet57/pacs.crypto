@@ -66,7 +66,13 @@ The two HTML simulators can still run standalone in **Demo** mode, but now also 
 
 ### Quick Start
 
-Run the reference server:
+There are three reviewer paths, in increasing order of setup:
+
+**1. MOCK demo — no server needed.** Open the presenter-driven Control Room shell straight from the repo root:
+
+- [`bank-to-vasp-control-room.html`](bank-to-vasp-control-room.html) — a guided walkthrough of the happy-path corridor (Travel Rule → settlement → camt.053 statement) with sample payloads bundled into the page. In **MOCK** mode it performs no network call; no reference server or chain is required.
+
+**2. LIVE local API demo — local reference server, no funded chain.** Run the reference server:
 
 ```bash
 cd reference-server
@@ -74,12 +80,14 @@ npm install
 npm start
 ```
 
-Then open either simulator locally:
+Then open either simulator locally (or switch the Control Room shell to its **Live API** mode):
 
 - `travel-rule-simulator-v1.3.html`
 - `instruction-simulator-v1.3.html`
 
-Switch **Execution Mode** to `Live API` and keep the default API base URL `http://127.0.0.1:5050`.
+Switch **Execution Mode** to `Live API` and keep the default API base URL `http://127.0.0.1:5050`. This runs against the default mock EVM adapter — no funded chain is touched.
+
+**3. Real-chain Sepolia evidence capture — separate funded-wallet path, not run by default.** An explicitly configured funded-wallet run that broadcasts one USDC transfer on Ethereum Sepolia and captures a reviewer evidence bundle. It is not part of the default walkthrough; see [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md).
 
 ### Roadmap And Backlog
 
@@ -91,6 +99,7 @@ The active forward plan is now documented in:
 - [`docs/spec-hardening.md`](docs/spec-hardening.md) — implementation decisions for lifecycle, failure, webhook, and reporting semantics
 - [`docs/chain-adapter.md`](docs/chain-adapter.md) — current adapter contract and swap-in boundary for later testnet work
 - [`docs/webhook-delivery.md`](docs/webhook-delivery.md) — delivery guarantees, retry model, and dead-letter handling
+- [`bank-to-vasp-control-room.html`](bank-to-vasp-control-room.html) — presenter-driven reviewer demo shell (MOCK bundled payloads, or Live API mode against the local server)
 - [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
 - [`docs/visual-showcase.html`](docs/visual-showcase.html) — reviewer-facing visual artifact page that keeps the draft PR non-normative
 - [`docs/visual-flow-map.md`](docs/visual-flow-map.md) — visual lifecycle map for Travel Rule, instruction, status, returns/reversals, and draft investigation flows

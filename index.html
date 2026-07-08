@@ -370,13 +370,24 @@
       <li>FINAL</li>
     </ol>
 
+    <p class="narrow">
+      New here? Start with the presenter-driven <strong>Control Room</strong> shell. It walks
+      the full happy path with sample payloads bundled into the page — no server, no network,
+      no chain in its <em>MOCK</em> mode. It can also switch to <em>Live API</em> mode against
+      the local reference server (default mock adapter at <code>http://127.0.0.1:5050</code>);
+      it does not touch a funded chain.
+    </p>
+    <div class="button-row">
+      <a class="btn" href="bank-to-vasp-control-room.html">Open the Control Room walkthrough (no server needed)</a>
+    </div>
+
     <div class="grid cols-3 section-grid">
       <article class="card">
         <h3><span class="step">Step 1</span> Travel Rule</h3>
         <p class="muted">Originator and beneficiary VASP exchange compliance data before execution.</p>
         <ul>
-          <li><a href="travel-rule-simulator-v3.html">Travel Rule simulator (v3)</a></li>
-          <li><a href="travel-rule-api-v3.yaml">OpenAPI: travel-rule-api-v3.yaml</a></li>
+          <li><a href="travel-rule-simulator-v1.3.html">Travel Rule simulator (v1.3)</a></li>
+          <li><a href="travel-rule-api-v1.3.yaml">OpenAPI: travel-rule-api-v1.3.yaml</a></li>
         </ul>
       </article>
 
@@ -384,7 +395,7 @@
         <h3><span class="step">Step 2</span> Quote</h3>
         <p class="muted">Pre-execution price, fee, and slippage discovery from the chain adapter.</p>
         <ul>
-          <li><a href="instruction-simulator-v1.html">Instruction simulator (v1)</a></li>
+          <li><a href="instruction-simulator-v1.3.html">Instruction simulator (v1.3)</a></li>
           <li><a href="docs/chain-adapter.md">Chain adapter contract</a></li>
         </ul>
       </article>
@@ -393,8 +404,8 @@
         <h3><span class="step">Step 3</span> Instruction</h3>
         <p class="muted">Submission and lifecycle progression backed by the EVM USDC adapter.</p>
         <ul>
-          <li><a href="instruction-simulator-v1.html">Instruction simulator (v1)</a></li>
-          <li><a href="instruction-api-v1.yaml">OpenAPI: instruction-api-v1.yaml</a></li>
+          <li><a href="instruction-simulator-v1.3.html">Instruction simulator (v1.3)</a></li>
+          <li><a href="instruction-api-v1.3.yaml">OpenAPI: instruction-api-v1.3.yaml</a></li>
         </ul>
       </article>
 
@@ -411,8 +422,8 @@
         <h3><span class="step">Step 5</span> Reporting</h3>
         <p class="muted">camt.054 notifications, camt.052 intraday, camt.053 statements.</p>
         <ul>
-          <li><a href="camt-simulator-v1.html">camt simulator (v1)</a></li>
-          <li><a href="camt-crypto-reporting-v1.yaml">OpenAPI: camt-crypto-reporting-v1.yaml</a></li>
+          <li><a href="account-reporting-simulator-v1.3.html">Account reporting simulator (v1.3)</a></li>
+          <li><a href="account-reporting-api-v1.3.yaml">OpenAPI: account-reporting-api-v1.3.yaml</a></li>
         </ul>
       </article>
 
@@ -420,6 +431,7 @@
         <h3><span class="step">Walkthrough</span></h3>
         <p class="muted">Recorded happy-path artifact pack from a single canonical run.</p>
         <ul>
+          <li><a href="bank-to-vasp-control-room.html">Control Room walkthrough (MOCK, no server)</a></li>
           <li><a href="docs/demo-bank-to-vasp.md">Bank-to-VASP demo guide</a></li>
           <li><a href="docs/demo-samples/happy-path/README.md">Happy-path sample pack</a></li>
         </ul>
@@ -549,27 +561,27 @@
     </p>
     <div class="grid cols-3">
       <article class="card">
-        <h3>Travel Rule v3</h3>
+        <h3>Travel Rule v1.3</h3>
         <p class="muted">FATF Travel Rule submission, callback, search, and stats.</p>
         <div class="button-row">
-          <a class="btn" href="travel-rule-simulator-v3.html">Open simulator</a>
-          <a class="btn" href="travel-rule-api-v3.yaml">View OpenAPI</a>
+          <a class="btn" href="travel-rule-simulator-v1.3.html">Open simulator</a>
+          <a class="btn" href="travel-rule-api-v1.3.yaml">View OpenAPI</a>
         </div>
       </article>
       <article class="card">
-        <h3>Instruction v1</h3>
+        <h3>Instruction v1.3</h3>
         <p class="muted">Quote, submission, status, and finality reads.</p>
         <div class="button-row">
-          <a class="btn" href="instruction-simulator-v1.html">Open simulator</a>
-          <a class="btn" href="instruction-api-v1.yaml">View OpenAPI</a>
+          <a class="btn" href="instruction-simulator-v1.3.html">Open simulator</a>
+          <a class="btn" href="instruction-api-v1.3.yaml">View OpenAPI</a>
         </div>
       </article>
       <article class="card">
-        <h3>camt crypto reporting v1</h3>
+        <h3>Account reporting v1.3</h3>
         <p class="muted">camt.054 / camt.052 / camt.053 reporting analogues.</p>
         <div class="button-row">
-          <a class="btn" href="camt-simulator-v1.html">Open simulator</a>
-          <a class="btn" href="camt-crypto-reporting-v1.yaml">View OpenAPI</a>
+          <a class="btn" href="account-reporting-simulator-v1.3.html">Open simulator</a>
+          <a class="btn" href="account-reporting-api-v1.3.yaml">View OpenAPI</a>
         </div>
       </article>
     </div>
@@ -628,6 +640,7 @@ npm start</code></pre>
           <li><a href="docs/roadmap.md">Roadmap</a> — post-wedge direction and locked defaults.</li>
           <li><a href="docs/backlog.md">Backlog</a> — prioritized work queue.</li>
           <li><a href="docs/architecture-note.md">Architecture note</a> — why there are two layers.</li>
+          <li><a href="bank-to-vasp-control-room.html">Control Room walkthrough</a> — presenter-driven demo shell (MOCK payloads or Live API mode).</li>
           <li><a href="docs/demo-bank-to-vasp.md">Bank-to-VASP demo guide</a> — reviewer walkthrough.</li>
           <li><a href="docs/visual-flow-map.md">Visual flow map</a> — lifecycle, return/reversal, and investigation boundaries.</li>
         </ul>
